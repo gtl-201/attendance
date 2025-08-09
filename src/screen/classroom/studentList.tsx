@@ -42,8 +42,9 @@ interface AttendanceData {
     studentId: string;
     classId: string;
     date: string;
-    status: 'present' | 'absent' | 'late' | 'excused';
+    status: 'present' | 'absent' | 'late' | 'excused' | 'makeup';
     note?: string;
+    fee?: number;
     createdAt: any;
 }
 
@@ -67,19 +68,20 @@ const StudentList: React.FC<StudentListProps> = ({ user }) => {
     const [classInfo, setClassInfo] = useState<ClassData | null>(null);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
-    
+
     // New toast message system
     const [toastMessages, setToastMessages] = useState<ToastMessage[]>([]);
-    
+
     const [showAddStudent, setShowAddStudent] = useState(false);
     const [newStudentEmail, setNewStudentEmail] = useState('');
 
     // States cho điểm danh - Đã cập nhật type để bao gồm 'excused'
     const [showAttendance, setShowAttendance] = useState(false);
     const [attendanceDate, setAttendanceDate] = useState(new Date().toISOString().split('T')[0]);
-    const [attendanceData, setAttendanceData] = useState<{ [key: string]: 'present' | 'absent' | 'late' | 'excused' }>({});
+    const [attendanceData, setAttendanceData] = useState<{ [key: string]: 'present' | 'absent' | 'late' | 'excused' | 'makeup' }>({});
     const [attendanceNotes, setAttendanceNotes] = useState<{ [key: string]: string }>({});
     const [todayAttendance, setTodayAttendance] = useState<AttendanceData[]>([]);
+    const [makeupFees, setMakeupFees] = useState<{ [key: string]: number }>({});
 
     // Function to add toast message
     const addMessage = (type: 'success' | 'error', text: string) => {
@@ -89,9 +91,9 @@ const StudentList: React.FC<StudentListProps> = ({ user }) => {
             text,
             timestamp: Date.now()
         };
-        
+
         setToastMessages(prev => [...prev, newMessage]);
-        
+
         // Auto remove after 10 seconds
         setTimeout(() => {
             removeMessage(newMessage.id);
@@ -167,17 +169,20 @@ const StudentList: React.FC<StudentListProps> = ({ user }) => {
 
             setTodayAttendance(attendanceList);
 
-            // Cập nhật attendance data từ database
-            const existingAttendance: { [key: string]: 'present' | 'absent' | 'late' | 'excused' } = {};
+            // Cập nhật attendance data từ database - Thêm xử lý fee
+            const existingAttendance: { [key: string]: 'present' | 'absent' | 'late' | 'excused' | 'makeup' } = {};
             const existingNotes: { [key: string]: string } = {};
+            const existingFees: { [key: string]: number } = {}; // Thêm dòng này
 
             attendanceList.forEach(record => {
                 existingAttendance[record.studentId] = record.status;
                 if (record.note) existingNotes[record.studentId] = record.note;
+                if (record.fee) existingFees[record.studentId] = record.fee; // Thêm dòng này
             });
 
             setAttendanceData(existingAttendance);
             setAttendanceNotes(existingNotes);
+            setMakeupFees(existingFees); // Thêm dòng này
         } catch (error) {
             console.error('Lỗi khi tải điểm danh:', error);
         }
@@ -274,7 +279,7 @@ const StudentList: React.FC<StudentListProps> = ({ user }) => {
     };
 
     // Cập nhật trạng thái điểm danh với toggle - Đã cập nhật để bao gồm 'excused'
-    const updateAttendanceStatus = (studentId: string, status: 'present' | 'absent' | 'late' | 'excused') => {
+    const updateAttendanceStatus = (studentId: string, status: 'present' | 'absent' | 'late' | 'excused' | 'makeup') => {
         setAttendanceData(prev => {
             const currentStatus = prev[studentId];
 
@@ -292,14 +297,32 @@ const StudentList: React.FC<StudentListProps> = ({ user }) => {
             };
         });
 
-        // Nếu bỏ chọn thì cũng xóa ghi chú
+        // Nếu bỏ chọn thì cũng xóa ghi chú và fee
         if (attendanceData[studentId] === status) {
             setAttendanceNotes(prev => {
                 const newNotes = { ...prev };
                 delete newNotes[studentId];
                 return newNotes;
             });
+
+            // Thêm xóa fee khi bỏ chọn
+            if (status === 'makeup') {
+                setMakeupFees(prev => {
+                    const newFees = { ...prev };
+                    delete newFees[studentId];
+                    return newFees;
+                });
+            }
         }
+    };
+
+    // Thêm function mới sau updateAttendanceNote
+    // Cập nhật phí bổ sung
+    const updateMakeupFee = (studentId: string, fee: number) => {
+        setMakeupFees(prev => ({
+            ...prev,
+            [studentId]: fee
+        }));
     };
 
     // Cập nhật ghi chú điểm danh
@@ -321,7 +344,7 @@ const StudentList: React.FC<StudentListProps> = ({ user }) => {
                 await deleteDoc(doc(db, 'attendance', record.id));
             }
 
-            // Thêm điểm danh mới
+            // Thêm điểm danh mới - Cập nhật để bao gồm fee
             const promises = Object.entries(attendanceData).map(async ([studentId, status]) => {
                 const attendanceRecord = {
                     studentId,
@@ -329,6 +352,7 @@ const StudentList: React.FC<StudentListProps> = ({ user }) => {
                     date: attendanceDate,
                     status,
                     note: attendanceNotes[studentId] || '',
+                    ...(status === 'makeup' && makeupFees[studentId] && { fee: makeupFees[studentId] }), // Thêm fee cho trạng thái makeup
                     createdAt: new Date()
                 };
 
@@ -347,13 +371,36 @@ const StudentList: React.FC<StudentListProps> = ({ user }) => {
 
     // Điểm danh tất cả có mặt
     const markAllPresent = () => {
-        const allPresent: { [key: string]: 'present' } = {};
-        filteredStudents.forEach(student => {
-            allPresent[student.id] = 'present';
-        });
-        setAttendanceData(allPresent);
-    };
+        const allStudentsPresent = filteredStudents.every(student =>
+            attendanceData[student.id] === 'present'
+        );
 
+        const allStudentsMarked = filteredStudents.every(student =>
+            attendanceData[student.id] !== undefined
+        );
+
+        if (allStudentsPresent) {
+            // Tất cả đã "present" -> Xóa hết
+            setAttendanceData({});
+            console.log('Đã bỏ chọn tất cả học sinh');
+        } else if (allStudentsMarked) {
+            // Tất cả đã có trạng thái nhưng không phải "present" -> Set all present
+            const newAttendanceData = { ...attendanceData };
+            filteredStudents.forEach(student => {
+                newAttendanceData[student.id] = 'present';
+            });
+            setAttendanceData(newAttendanceData);
+            console.log('Đã đánh dấu tất cả học sinh có mặt');
+        } else {
+            // Một số chưa có trạng thái -> Set all present
+            const allPresent: { [key: string]: 'present' } = {};
+            filteredStudents.forEach(student => {
+                allPresent[student.id] = 'present';
+            });
+            setAttendanceData(allPresent);
+            console.log('Đã đánh dấu tất cả học sinh có mặt');
+        }
+    };
     // Format ngày tháng
     const formatDate = (timestamp: any) => {
         if (!timestamp) return 'N/A';
@@ -376,7 +423,8 @@ const StudentList: React.FC<StudentListProps> = ({ user }) => {
         const absent = Object.values(attendanceData).filter(status => status === 'absent').length;
         const late = Object.values(attendanceData).filter(status => status === 'late').length;
         const excused = Object.values(attendanceData).filter(status => status === 'excused').length;
-        return { present, absent, late, excused };
+        const makeup = Object.values(attendanceData).filter(status => status === 'makeup').length; // Thêm dòng này
+        return { present, absent, late, excused, makeup }; // Thêm makeup vào return
     };
 
     if (!classId) {
@@ -424,11 +472,10 @@ const StudentList: React.FC<StudentListProps> = ({ user }) => {
                 {toastMessages.map((message) => (
                     <div
                         key={message.id}
-                        className={`transform transition-all duration-300 ease-out p-4 rounded-lg shadow-lg border-l-4 ${
-                            message.type === 'success'
-                                ? 'bg-white border-green-500 text-green-800'
-                                : 'bg-white border-red-500 text-red-800'
-                        }`}
+                        className={`transform transition-all duration-300 ease-out p-4 rounded-lg shadow-lg border-l-4 ${message.type === 'success'
+                            ? 'bg-white border-green-500 text-green-800'
+                            : 'bg-white border-red-500 text-red-800'
+                            }`}
                         style={{
                             animation: 'slideInRight 0.3s ease-out',
                             animationFillMode: 'both'
@@ -528,40 +575,110 @@ const StudentList: React.FC<StudentListProps> = ({ user }) => {
 
                 {/* Panel điểm danh - Đã cập nhật thống kê để bao gồm 'excused' */}
                 {showAttendance && classInfo && user && user.uid === classInfo.teacherId && (
-                    <div className="mb-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
-                        <div className="flex justify-between items-center mb-4">
-                            <h3 className="text-lg font-semibold text-blue-800">Điểm danh lớp học</h3>
-                            <div className="flex items-center gap-4">
-                                <input
-                                    type="date"
-                                    value={attendanceDate}
-                                    onChange={(e) => setAttendanceDate(e.target.value)}
-                                    className="px-3 py-1 border border-gray-300 rounded-md text-sm"
-                                />
-                                <button
-                                    onClick={markAllPresent}
-                                    className="px-3 py-1 text-sm bg-green-100 text-green-800 rounded-md hover:bg-green-200"
-                                >
-                                    Tất cả có mặt
-                                </button>
-                                <button
-                                    onClick={saveAttendance}
-                                    className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-                                >
-                                    💾 Lưu điểm danh
-                                </button>
+                    <div className="mb-6 p-3 md:p-4 bg-blue-50 rounded-lg border border-blue-200">
+                        {/* Header Section */}
+                        <div className="mb-4">
+                            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
+                                <h3 className="text-lg font-semibold text-blue-800">
+                                    Điểm danh lớp học
+                                </h3>
+
+                                {/* Controls - Stack on mobile, inline on desktop */}
+                                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3">
+                                    {/* Date picker */}
+                                    <input
+                                        type="date"
+                                        value={attendanceDate}
+                                        onChange={(e) => setAttendanceDate(e.target.value)}
+                                        className="px-3 py-2 border border-gray-300 rounded-md text-sm w-full sm:w-auto"
+                                    />
+
+                                    {/* Action buttons */}
+                                    <div className="flex gap-2">
+                                        <button
+                                            onClick={markAllPresent}
+                                            className="flex-1 sm:flex-none px-3 py-2 text-sm bg-green-100 text-green-800 rounded-md hover:bg-green-200 transition-colors whitespace-nowrap"
+                                        >
+                                            <span className="sm:hidden">Tất cả có mặt</span>
+                                            <span className="hidden sm:inline">Tất cả có mặt</span>
+                                        </button>
+
+                                        <button
+                                            onClick={saveAttendance}
+                                            className="flex-1 sm:flex-none px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors whitespace-nowrap"
+                                        >
+                                            <span className="sm:hidden">💾 Lưu</span>
+                                            <span className="hidden sm:inline">💾 Lưu điểm danh</span>
+                                        </button>
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
-                        {/* Thống kê điểm danh - Đã thêm trạng thái 'Xin nghỉ' */}
+                        {/* Statistics Section */}
                         {Object.keys(attendanceData).length > 0 && (
-                            <div className="mb-4 p-3 bg-white rounded-md">
-                                <div className="flex gap-6 text-sm flex-wrap">
-                                    <span className="text-green-600">✅ Có mặt: {getAttendanceCount().present}</span>
-                                    <span className="text-red-600">❌ Vắng: {getAttendanceCount().absent}</span>
-                                    <span className="text-yellow-600">⏰ Muộn: {getAttendanceCount().late}</span>
-                                    <span className="text-blue-600">📝 Xin nghỉ: {getAttendanceCount().excused}</span>
-                                    <span className="text-gray-500">⚪ Chưa điểm danh: {filteredStudents.length - Object.keys(attendanceData).length}</span>
+                            <div className="mb-4 p-3 bg-white rounded-md border border-gray-100">
+                                {/* Mobile: Grid layout for better space usage */}
+                                <div className="grid grid-cols-2 sm:hidden gap-2 text-sm">
+                                    <div className="flex items-center gap-1">
+                                        <span className="text-green-600">✅</span>
+                                        <span className="text-gray-700">Có mặt:</span>
+                                        <span className="font-medium">{getAttendanceCount().present}</span>
+                                    </div>
+                                    <div className="flex items-center gap-1">
+                                        <span className="text-red-600">❌</span>
+                                        <span className="text-gray-700">Vắng:</span>
+                                        <span className="font-medium">{getAttendanceCount().absent}</span>
+                                    </div>
+                                    <div className="flex items-center gap-1">
+                                        <span className="text-yellow-600">⏰</span>
+                                        <span className="text-gray-700">Muộn:</span>
+                                        <span className="font-medium">{getAttendanceCount().late}</span>
+                                    </div>
+                                    <div className="flex items-center gap-1">
+                                        <span className="text-blue-600">📝</span>
+                                        <span className="text-gray-700">Xin nghỉ:</span>
+                                        <span className="font-medium">{getAttendanceCount().excused}</span>
+                                    </div>
+                                    <div className="flex items-center gap-1">
+                                        <span className="text-purple-600">🔄</span>
+                                        <span className="text-gray-700">Bổ sung:</span>
+                                        <span className="font-medium">{getAttendanceCount().makeup}</span>
+                                    </div>
+                                    <div className="flex items-center gap-1">
+                                        <span className="text-gray-500">⚪</span>
+                                        <span className="text-gray-700">Chưa điểm danh:</span>
+                                        <span className="font-medium">{filteredStudents.length - Object.keys(attendanceData).length}</span>
+                                    </div>
+                                </div>
+
+                                {/* Desktop: Horizontal layout */}
+                                <div className="hidden sm:flex flex-wrap gap-4 lg:gap-6 text-sm">
+                                    <span className="text-green-600 flex items-center gap-1">
+                                        ✅ Có mặt: <span className="font-medium">{getAttendanceCount().present}</span>
+                                    </span>
+                                    <span className="text-red-600 flex items-center gap-1">
+                                        ❌ Vắng: <span className="font-medium">{getAttendanceCount().absent}</span>
+                                    </span>
+                                    <span className="text-yellow-600 flex items-center gap-1">
+                                        ⏰ Muộn: <span className="font-medium">{getAttendanceCount().late}</span>
+                                    </span>
+                                    <span className="text-blue-600 flex items-center gap-1">
+                                        📝 Xin nghỉ: <span className="font-medium">{getAttendanceCount().excused}</span>
+                                    </span>
+                                    <span className="text-purple-600 flex items-center gap-1">
+                                        🔄 Bổ sung: <span className="font-medium">{getAttendanceCount().makeup}</span>
+                                    </span>
+                                    <span className="text-gray-500 flex items-center gap-1">
+                                        ⚪ Chưa điểm danh: <span className="font-medium">{filteredStudents.length - Object.keys(attendanceData).length}</span>
+                                    </span>
+                                </div>
+
+                                {/* Summary bar for mobile */}
+                                <div className="sm:hidden mt-3 pt-3 border-t border-gray-200">
+                                    <div className="text-center text-sm text-gray-600">
+                                        <span className="font-medium">Tổng cộng:</span> {filteredStudents.length} học sinh
+                                    </div>
                                 </div>
                             </div>
                         )}
@@ -612,13 +729,152 @@ const StudentList: React.FC<StudentListProps> = ({ user }) => {
                     {filteredStudents.map((student, index) => (
                         <div
                             key={student.id}
-                            className={`bg-white rounded-lg shadow-md p-4 border-l-4 ${student.status === 'active' ? 'border-green-500' : 'border-red-500'
+                            className={`bg-white rounded-lg shadow-md p-4 border-l-4 transition-all hover:shadow-lg ${student.status === 'active' ? 'border-green-500' : 'border-red-500'
                                 }`}
                         >
-                            <div className="flex justify-between items-center">
+                            {/* Mobile Layout: Stack vertically */}
+                            <div className="lg:hidden">
+                                {/* Student Info Section - Top */}
+                                <div className="mb-4">
+                                    <div className="flex items-start gap-3 mb-3">
+                                        <span className="bg-gray-100 text-gray-700 text-sm font-medium px-2 py-1 rounded-full min-w-[2rem] text-center">
+                                            #{index + 1}
+                                        </span>
+                                        <div className="flex-1">
+                                            <h3 className="text-lg font-semibold text-gray-800 mb-1">
+                                                {student.studentName}
+                                            </h3>
+                                            <p className="text-sm text-gray-600 mb-1">{student.studentEmail}</p>
+                                            <p className="text-xs text-gray-500">
+                                                Ngày tham gia: {formatDate(student.enrolledAt)}
+                                            </p>
+                                        </div>
+                                        {/* Status Badge */}
+                                        {showAttendance && attendanceData[student.id] && (
+                                            <div className="ml-2">
+                                                <span className={`px-2 py-1 rounded-full text-xs font-medium ${attendanceData[student.id] === 'present' ? 'bg-green-500 text-white' :
+                                                    attendanceData[student.id] === 'late' ? 'bg-yellow-500 text-white' :
+                                                        attendanceData[student.id] === 'absent' ? 'bg-red-500 text-white' :
+                                                            attendanceData[student.id] === 'excused' ? 'bg-blue-500 text-white' :
+                                                                attendanceData[student.id] === 'makeup' ? 'bg-purple-500 text-white' :
+                                                                    'bg-gray-300 text-gray-700'
+                                                    }`}>
+                                                    {attendanceData[student.id] === 'present' ? '✅' :
+                                                        attendanceData[student.id] === 'late' ? '⏰' :
+                                                            attendanceData[student.id] === 'absent' ? '❌' :
+                                                                attendanceData[student.id] === 'excused' ? '📝' :
+                                                                    attendanceData[student.id] === 'makeup' ? '🔄' : '⚪'}
+                                                </span>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+
+                                {/* Controls Section - Bottom */}
+                                {showAttendance && classInfo && user && user.uid === classInfo.teacherId && (
+                                    <div className="space-y-3">
+                                        {/* Primary attendance buttons */}
+                                        <div className="grid grid-cols-2 gap-2">
+                                            <button
+                                                onClick={() => updateAttendanceStatus(student.id, 'present')}
+                                                className={`p-3 text-sm rounded-lg font-medium transition-all ${attendanceData[student.id] === 'present'
+                                                    ? 'bg-green-500 text-white shadow-md'
+                                                    : ' text-green-700 hover:bg-green-100 border border-green-200'
+                                                    }`}
+                                            >
+                                                ✅ Có mặt
+                                            </button>
+                                            <button
+                                                onClick={() => updateAttendanceStatus(student.id, 'absent')}
+                                                className={`p-3 text-sm rounded-lg font-medium transition-all ${attendanceData[student.id] === 'absent'
+                                                    ? 'bg-red-500 text-white shadow-md'
+                                                    : ' text-red-700 hover:bg-red-100 border border-red-200'
+                                                    }`}
+                                            >
+                                                ❌ Vắng
+                                            </button>
+                                        </div>
+
+                                        {/* Secondary attendance buttons */}
+                                        <div className="grid grid-cols-3 gap-2">
+                                            <button
+                                                onClick={() => updateAttendanceStatus(student.id, 'late')}
+                                                className={`p-2 text-xs rounded-lg font-medium transition-all ${attendanceData[student.id] === 'late'
+                                                    ? 'bg-yellow-500 text-white shadow-md'
+                                                    : ' text-yellow-700 hover:bg-yellow-100 border border-yellow-200'
+                                                    }`}
+                                            >
+                                                ⏰ Muộn
+                                            </button>
+                                            <button
+                                                onClick={() => updateAttendanceStatus(student.id, 'excused')}
+                                                className={`p-2 text-xs rounded-lg font-medium transition-all ${attendanceData[student.id] === 'excused'
+                                                    ? 'bg-blue-500 text-white shadow-md'
+                                                    : ' text-blue-700 hover:bg-blue-100 border border-blue-200'
+                                                    }`}
+                                            >
+                                                📝 Xin nghỉ
+                                            </button>
+                                            <button
+                                                onClick={() => updateAttendanceStatus(student.id, 'makeup')}
+                                                className={`p-2 text-xs rounded-lg font-medium transition-all ${attendanceData[student.id] === 'makeup'
+                                                    ? 'bg-purple-500 text-white shadow-md'
+                                                    : ' text-purple-700 hover:bg-purple-100 border border-purple-200'
+                                                    }`}
+                                            >
+                                                🔄 Bổ sung
+                                            </button>
+                                        </div>
+
+                                        {/* Makeup fee input - conditional */}
+                                        {attendanceData[student.id] === 'makeup' && (
+                                            <div className="bg-purple-50 p-3 rounded-lg border border-purple-200">
+                                                <label className="block text-xs font-medium text-purple-700 mb-2">
+                                                    Phí bổ sung (VNĐ)
+                                                </label>
+                                                <input
+                                                    type="number"
+                                                    placeholder="Nhập phí bổ sung..."
+                                                    value={makeupFees[student.id] || ''}
+                                                    onChange={(e) => updateMakeupFee(student.id, Number(e.target.value))}
+                                                    className="w-full px-3 py-2 text-sm border border-purple-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                                                    min="0"
+                                                    step="1000"
+                                                />
+                                            </div>
+                                        )}
+
+                                        {/* Notes input */}
+                                        <div>
+                                            <textarea
+                                                placeholder="Ghi chú..."
+                                                value={attendanceNotes[student.id] || ''}
+                                                onChange={(e) => updateAttendanceNote(student.id, e.target.value)}
+                                                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"
+                                                rows={2}
+                                            />
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Remove button for non-attendance mode */}
+                                {!showAttendance && classInfo && user && user.uid === classInfo.teacherId && (
+                                    <div className="mt-3 pt-3 border-t border-gray-200">
+                                        <button
+                                            onClick={() => removeStudent(student.id, student.studentName)}
+                                            className="w-full px-4 py-2 text-sm rounded-lg font-medium bg-red-50 text-red-700 hover:bg-red-100 border border-red-200 transition-colors"
+                                        >
+                                            🗑️ Xóa học sinh
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Desktop Layout: Horizontal */}
+                            <div className="hidden lg:flex justify-between items-center">
                                 <div className="flex-1">
                                     <div className="flex items-center gap-4">
-                                        <span className="text-lg font-medium text-gray-800">
+                                        <span className="bg-gray-100 text-gray-700 text-sm font-medium px-3 py-1 rounded-full">
                                             #{index + 1}
                                         </span>
                                         <div className="flex-1">
@@ -631,15 +887,15 @@ const StudentList: React.FC<StudentListProps> = ({ user }) => {
                                             </p>
                                         </div>
 
-                                        {/* Điểm danh controls - Đã thêm nút 'Xin nghỉ' và cải thiện layout */}
+                                        {/* Desktop Attendance controls */}
                                         {showAttendance && classInfo && user && user.uid === classInfo.teacherId && (
-                                            <div className="flex flex-col gap-2 min-w-80">
-                                                <div className="grid grid-cols-2 gap-2">
+                                            <div className="flex flex-col gap-2 min-w-96">
+                                                <div className="grid grid-cols-3 gap-2">
                                                     <button
                                                         onClick={() => updateAttendanceStatus(student.id, 'present')}
                                                         className={`px-3 py-1 text-xs rounded-md font-medium transition-all ${attendanceData[student.id] === 'present'
                                                             ? 'bg-green-500 text-white shadow-md'
-                                                            : 'bg-green-100 text-green-800 hover:bg-green-200'
+                                                            : 'border border-green-300 text-green-800 hover:bg-green-200'
                                                             }`}
                                                     >
                                                         ✅ Có mặt
@@ -648,7 +904,7 @@ const StudentList: React.FC<StudentListProps> = ({ user }) => {
                                                         onClick={() => updateAttendanceStatus(student.id, 'late')}
                                                         className={`px-3 py-1 text-xs rounded-md font-medium transition-all ${attendanceData[student.id] === 'late'
                                                             ? 'bg-yellow-500 text-white shadow-md'
-                                                            : 'bg-yellow-100 text-yellow-800 hover:bg-yellow-200'
+                                                            : 'border border-yellow-300 text-yellow-800 hover:bg-yellow-200'
                                                             }`}
                                                     >
                                                         ⏰ Muộn
@@ -657,21 +913,46 @@ const StudentList: React.FC<StudentListProps> = ({ user }) => {
                                                         onClick={() => updateAttendanceStatus(student.id, 'absent')}
                                                         className={`px-3 py-1 text-xs rounded-md font-medium transition-all ${attendanceData[student.id] === 'absent'
                                                             ? 'bg-red-500 text-white shadow-md'
-                                                            : 'bg-red-100 text-red-800 hover:bg-red-200'
+                                                            : 'border border-red-300 text-red-800 hover:bg-red-200'
                                                             }`}
                                                     >
                                                         ❌ Vắng
                                                     </button>
+                                                </div>
+                                                <div className="grid grid-cols-2 gap-2">
                                                     <button
                                                         onClick={() => updateAttendanceStatus(student.id, 'excused')}
                                                         className={`px-3 py-1 text-xs rounded-md font-medium transition-all ${attendanceData[student.id] === 'excused'
                                                             ? 'bg-blue-500 text-white shadow-md'
-                                                            : 'bg-blue-100 text-blue-800 hover:bg-blue-200'
+                                                            : 'border border-blue-300 text-blue-800 hover:bg-blue-200'
                                                             }`}
                                                     >
                                                         📝 Xin nghỉ
                                                     </button>
+                                                    <button
+                                                        onClick={() => updateAttendanceStatus(student.id, 'makeup')}
+                                                        className={`px-3 py-1 text-xs rounded-md font-medium transition-all ${attendanceData[student.id] === 'makeup'
+                                                            ? 'bg-purple-500 text-white shadow-md'
+                                                            : 'border border-purple-300 text-purple-800 hover:bg-purple-200'
+                                                            }`}
+                                                    >
+                                                        🔄 Bổ sung
+                                                    </button>
                                                 </div>
+
+                                                {/* Desktop Makeup fee input */}
+                                                {attendanceData[student.id] === 'makeup' && (
+                                                    <input
+                                                        type="number"
+                                                        placeholder="Nhập phí bổ sung..."
+                                                        value={makeupFees[student.id] || ''}
+                                                        onChange={(e) => updateMakeupFee(student.id, Number(e.target.value))}
+                                                        className="px-2 py-1 text-xs border border-purple-300 rounded-md focus:outline-none focus:ring-1 focus:ring-purple-500"
+                                                        min="0"
+                                                        step="1000"
+                                                    />
+                                                )}
+
                                                 <input
                                                     type="text"
                                                     placeholder="Ghi chú..."
@@ -684,6 +965,7 @@ const StudentList: React.FC<StudentListProps> = ({ user }) => {
                                     </div>
                                 </div>
 
+                                {/* Desktop Remove button */}
                                 {!showAttendance && classInfo && user && user.uid === classInfo.teacherId && (
                                     <div className="flex items-center gap-3">
                                         <div className="flex gap-2">

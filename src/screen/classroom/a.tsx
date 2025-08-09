@@ -17,7 +17,8 @@ interface AttendanceData {
     studentId: string;
     classId: string;
     date: string;
-    status: 'present' | 'absent' | 'excused' | 'late';
+    status: 'present' | 'absent' | 'excused' | 'late' | 'makeup';  // Thêm 'makeup'
+    fee?: number;  // Thêm field fee
     note?: string;
     createdAt: any;
 }
@@ -30,6 +31,15 @@ interface StudentData {
     classId: string;
     enrolledAt: any;
     status: 'active' | 'inactive';
+}
+interface StudentStats {
+    name: string;
+    present: number;
+    late: number;
+    excused: number;
+    absent: number;
+    makeup: number;
+    totalFee: number;
 }
 
 interface ClassData {
@@ -312,6 +322,7 @@ const Attendance: React.FC<AttendanceProps> = ({ user }) => {
             case 'present': return '✅';
             case 'absent': return '❌';
             case 'late': return '⏰';
+            case 'makeup': return '🔄';
             default: return '⚪';
         }
     };
@@ -321,6 +332,7 @@ const Attendance: React.FC<AttendanceProps> = ({ user }) => {
             case 'present': return 'text-green-600 bg-green-50';
             case 'absent': return 'text-red-600 bg-red-50';
             case 'late': return 'text-yellow-600 bg-yellow-50';
+            case 'makeup': return 'text-indigo-600 bg-indigo-50';
             default: return 'text-gray-600 bg-gray-50';
         }
     };
@@ -333,6 +345,7 @@ const Attendance: React.FC<AttendanceProps> = ({ user }) => {
             absent: filteredRecords.filter(r => r.status === 'absent').length,
             excused: filteredRecords.filter(r => r.status === 'excused').length,
             late: filteredRecords.filter(r => r.status === 'late').length,
+            makeup: filteredRecords.filter(r => r.status === 'makeup').length,  // Thêm này
         };
 
         return stats;
@@ -400,11 +413,17 @@ const Attendance: React.FC<AttendanceProps> = ({ user }) => {
         monthRecords.forEach(record => {
             const classInfo = classes.find(c => c.id === record.classId);
             const sessionFee = classInfo?.feePerSession || 0;
-            const shouldCharge = record.status !== 'excused';
+
+            let feeToCharge = 0;
+            if (record.status === 'makeup') {
+                feeToCharge = record.fee || sessionFee;  // Sử dụng fee từ record cho makeup
+            } else if (record.status !== 'excused') {
+                feeToCharge = sessionFee;  // Dùng fee của lớp cho các trạng thái khác
+            }
 
             recordsByDate[record.date] = {
                 ...record,
-                fee: shouldCharge ? sessionFee : 0
+                fee: feeToCharge
             };
         });
 
@@ -575,6 +594,16 @@ const Attendance: React.FC<AttendanceProps> = ({ user }) => {
                                             <p className="text-lg sm:text-2xl font-bold text-purple-600">{stats.excused}</p>
                                         </div>
                                         <span className="text-lg sm:text-2xl flex-shrink-0 ml-2">📝</span>
+                                    </div>
+                                </div>
+
+                                <div className="bg-white p-3 sm:p-4 rounded-lg shadow-md border-l-4 border-indigo-500 hover:shadow-lg transition-shadow">
+                                    <div className="flex items-center justify-between">
+                                        <div className="min-w-0 flex-1">
+                                            <p className="text-xs sm:text-sm text-gray-600 truncate">Bổ sung</p>
+                                            <p className="text-lg sm:text-2xl font-bold text-indigo-600">{stats.makeup}</p>
+                                        </div>
+                                        <span className="text-lg sm:text-2xl flex-shrink-0 ml-2">🔄</span>
                                     </div>
                                 </div>
                             </>
@@ -752,6 +781,7 @@ const Attendance: React.FC<AttendanceProps> = ({ user }) => {
                                                             <option value="late">⏰ Muộn</option>
                                                             <option value="absent">❌ Vắng</option>
                                                             <option value="excused">📝 Xin nghỉ</option>
+                                                            <option value="makeup">🔄 Bổ sung</option>  {/* THÊM DÒNG NÀY */}
                                                         </select>
                                                     </div>
 
@@ -907,11 +937,12 @@ const Attendance: React.FC<AttendanceProps> = ({ user }) => {
                                                         late: 0,
                                                         excused: 0,
                                                         absent: 0,
+                                                        makeup: 0,
                                                         totalFee: 0
                                                     };
                                                 }
 
-                                                // Count attendance types and calculate fees (excluding excused)
+                                                // Count attendance types and calculate fees
                                                 switch (record.status) {
                                                     case 'present':
                                                         acc[studentId].present++;
@@ -925,6 +956,10 @@ const Attendance: React.FC<AttendanceProps> = ({ user }) => {
                                                         acc[studentId].absent++;
                                                         acc[studentId].totalFee += feePerSession;
                                                         break;
+                                                    case 'makeup':
+                                                        acc[studentId].makeup++;
+                                                        acc[studentId].totalFee += record.fee || feePerSession;
+                                                        break;
                                                     case 'excused':
                                                         acc[studentId].excused++;
                                                         // No fee for excused absence
@@ -932,14 +967,7 @@ const Attendance: React.FC<AttendanceProps> = ({ user }) => {
                                                 }
 
                                                 return acc;
-                                            }, {} as Record<string, {
-                                                name: string;
-                                                present: number;
-                                                late: number;
-                                                excused: number;
-                                                absent: number;
-                                                totalFee: number;
-                                            }>);
+                                            }, {} as Record<string, StudentStats>);
 
                                             return (
                                                 <div key={classId} className="mb-4 sm:mb-8">
@@ -994,6 +1022,13 @@ const Attendance: React.FC<AttendanceProps> = ({ user }) => {
                                                                             <span className="text-red-600">✗</span>
                                                                         </div>
                                                                     </th>
+                                                                    {/* Sau cột "Vắng" */}
+                                                                    <th className="px-1 sm:px-3 py-2 sm:py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                                        <div className="flex flex-col">
+                                                                            <span>Bổ sung</span>
+                                                                            <span className="text-indigo-600">🔄</span>
+                                                                        </div>
+                                                                    </th>
                                                                     <th className="px-2 sm:px-6 py-2 sm:py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                                                                         <span className="block sm:hidden">Tiền</span>
                                                                         <span className="hidden sm:block">Tổng tiền</span>
@@ -1042,6 +1077,12 @@ const Attendance: React.FC<AttendanceProps> = ({ user }) => {
                                                                             </span>
                                                                         </td>
 
+                                                                        <td className="px-1 sm:px-3 py-2 sm:py-4 text-center">
+                                                                            <span className="inline-flex items-center justify-center w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-indigo-100 text-indigo-800 font-bold text-xs sm:text-sm">
+                                                                                {stats.makeup}
+                                                                            </span>
+                                                                        </td>
+
                                                                         <td className="px-2 sm:px-6 py-2 sm:py-4 text-right">
                                                                             <div className="font-bold text-sm sm:text-lg text-green-600">
                                                                                 <span className="hidden sm:inline">{stats.totalFee.toLocaleString('vi-VN')}₫</span>
@@ -1073,6 +1114,9 @@ const Attendance: React.FC<AttendanceProps> = ({ user }) => {
                                                                     </td>
                                                                     <td className="px-1 sm:px-3 py-2 sm:py-4 text-center font-bold text-red-600 text-xs sm:text-sm">
                                                                         {Object.values(studentStats).reduce((sum, s) => sum + s.absent, 0)}
+                                                                    </td>
+                                                                    <td className="px-1 sm:px-3 py-2 sm:py-4 text-center font-bold text-red-600 text-xs sm:text-sm">
+                                                                        {Object.values(studentStats).reduce((sum, s) => sum + s.makeup, 0)}
                                                                     </td>
                                                                     <td className="px-2 sm:px-6 py-2 sm:py-4 text-right">
                                                                         <div className="font-bold text-base sm:text-xl text-green-600">
@@ -1172,9 +1216,14 @@ const Attendance: React.FC<AttendanceProps> = ({ user }) => {
                                                             const totalFee = filteredRecords.reduce((sum, record) => {
                                                                 const classInfo = classes.find(c => c.id === record.classId);
                                                                 const sessionFee = classInfo?.feePerSession || 0;
-                                                                // Tính phí cho tất cả trạng thái trừ "excused" (xin nghỉ)
-                                                                const shouldCharge = record.status !== 'excused';
-                                                                return sum + (shouldCharge ? sessionFee : 0);
+
+                                                                // Đối với makeup, sử dụng fee từ record, các trạng thái khác dùng sessionFee
+                                                                if (record.status === 'makeup') {
+                                                                    return sum + (record.fee || sessionFee);
+                                                                } else if (record.status !== 'excused') {  // Tính phí cho tất cả trừ excused
+                                                                    return sum + sessionFee;
+                                                                }
+                                                                return sum;
                                                             }, 0);
                                                             return (
                                                                 <>
@@ -1255,10 +1304,16 @@ const Attendance: React.FC<AttendanceProps> = ({ user }) => {
                                     const dayAttendance = attendanceByDate[dateString] || [];
 
                                     // Group attendance by class
-                                    const attendanceByClass: { [classId: string]: { present: number; absent: number; excused: number; late: number } } = {};
+                                    const attendanceByClass: { [classId: string]: { present: number; absent: number; excused: number; late: number; makeup: number } } = {};
                                     dayAttendance.forEach(record => {
                                         if (!attendanceByClass[record.classId]) {
-                                            attendanceByClass[record.classId] = { present: 0, absent: 0, excused: 0, late: 0 };
+                                            attendanceByClass[record.classId] = {
+                                                present: 0,
+                                                absent: 0,
+                                                excused: 0,
+                                                late: 0,
+                                                makeup: 0  // THÊM DÒNG NÀY
+                                            };
                                         }
                                         attendanceByClass[record.classId][record.status]++;
                                     });
@@ -1326,6 +1381,12 @@ const Attendance: React.FC<AttendanceProps> = ({ user }) => {
                                                                             <div className="flex items-center gap-0.5">
                                                                                 <span className="text-red-600">❌</span>
                                                                                 <span className="font-medium text-red-600">{stats.absent}</span>
+                                                                            </div>
+                                                                        )}
+                                                                        {stats.makeup > 0 && (
+                                                                            <div className="flex items-center gap-0.5">
+                                                                                <span className="text-indigo-600">🔄</span>
+                                                                                <span className="font-medium text-indigo-600">{stats.makeup}</span>
                                                                             </div>
                                                                         )}
                                                                     </div>
@@ -1536,12 +1597,12 @@ const Attendance: React.FC<AttendanceProps> = ({ user }) => {
                                 <div className="grid gap-4">
                                     {(() => {
                                         // Group records by month
-                                        const monthlyData: { [key: string]: { present: number; absent: number; excused: number; late: number } } = {};
+                                        const monthlyData: { [key: string]: { present: number; absent: number; excused: number; late: number; makeup: number } } = {};
 
                                         filteredRecords.forEach(record => {
                                             const month = record.date.substring(0, 7); // YYYY-MM format
                                             if (!monthlyData[month]) {
-                                                monthlyData[month] = { present: 0, absent: 0, excused: 0, late: 0 };
+                                                monthlyData[month] = { present: 0, absent: 0, excused: 0, late: 0, makeup: 0 };
                                             }
                                             monthlyData[month][record.status]++;
                                         });
@@ -1651,7 +1712,8 @@ const Attendance: React.FC<AttendanceProps> = ({ user }) => {
                                     present: recordsArray.filter(r => r.status === 'present').length,
                                     late: recordsArray.filter(r => r.status === 'late').length,
                                     absent: recordsArray.filter(r => r.status === 'absent').length,
-                                    excused: recordsArray.filter(r => r.status === 'excused').length
+                                    excused: recordsArray.filter(r => r.status === 'excused').length,
+                                    makeup: recordsArray.filter(r => r.status === 'makeup').length,
                                 };
 
                                 const totalSessions = recordsArray.length;
@@ -1690,7 +1752,15 @@ const Attendance: React.FC<AttendanceProps> = ({ user }) => {
                                                     <span>Xin nghỉ</span>
                                                 </div>
                                             </div>
+                                            <div className="bg-indigo-50 p-4 rounded-lg text-center">
+                                                <div className="text-2xl font-bold text-indigo-600">{stats.makeup}</div>
+                                                <div className="text-sm text-gray-600 flex items-center justify-center gap-1">
+                                                    <span className="text-indigo-500">🔄</span>
+                                                    <span>Bổ sung</span>
+                                                </div>
+                                            </div>
                                         </div>
+
 
                                         {/* Attendance Rate */}
                                         <div className="bg-gray-50 p-4 rounded-lg">
@@ -1759,7 +1829,8 @@ const Attendance: React.FC<AttendanceProps> = ({ user }) => {
                                                                     <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(record.status)}`}>
                                                                         {record.status === 'present' ? 'Có mặt' :
                                                                             record.status === 'late' ? 'Muộn' :
-                                                                                record.status === 'absent' ? 'Vắng mặt' : 'Xin nghỉ'}
+                                                                                record.status === 'absent' ? "Vắng mặt" :
+                                                                                    record.status === 'makeup' ? 'Bổ sung' : 'Xin nghỉ'}
                                                                     </span>
                                                                     {record.note && (
                                                                         <div className="text-sm text-gray-600 max-w-xs truncate">
@@ -1874,6 +1945,15 @@ const Attendance: React.FC<AttendanceProps> = ({ user }) => {
                                                     <span>Xin nghỉ</span>
                                                 </div>
                                             </div>
+                                            <div className="bg-indigo-50 p-4 rounded-lg text-center">
+                                                <div className="text-2xl font-bold text-indigo-600">
+                                                    {dayAttendance.filter(r => r.status === 'makeup').length}
+                                                </div>
+                                                <div className="text-sm text-gray-600 flex items-center justify-center gap-1">
+                                                    <span className="text-indigo-500">🔄</span>
+                                                    <span>Bổ sung</span>
+                                                </div>
+                                            </div>
                                         </div>
 
                                         {/* Attendance by Class */}
@@ -1934,7 +2014,8 @@ const Attendance: React.FC<AttendanceProps> = ({ user }) => {
                                                                             <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(record.status)}`}>
                                                                                 {record.status === 'present' ? 'Có mặt' :
                                                                                     record.status === 'late' ? 'Muộn' :
-                                                                                        record.status === 'absent' ? 'Vắng mặt' : 'Xin nghỉ'}
+                                                                                        record.status === 'absent' ? "Vắng mặt" :
+                                                                                            record.status === 'makeup' ? 'Bổ sung' : 'Xin nghỉ'}
                                                                             </span>
                                                                             {record.note && (
                                                                                 <div className="text-sm text-gray-600 max-w-xs">

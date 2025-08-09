@@ -1,14 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { 
-  collection, 
-  getDocs, 
-  query, 
+import {
+  collection,
+  getDocs,
+  query,
   orderBy,
   where,
   doc,
   updateDoc,
-  deleteDoc 
+  deleteDoc
 } from 'firebase/firestore';
 import { db } from '../../firebase';
 
@@ -45,7 +45,7 @@ const ClassList: React.FC<ClassListProps> = ({ user }) => {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [error, setError] = useState<string>('');
-  
+
   // New toast message system
   const [toastMessages, setToastMessages] = useState<ToastMessage[]>([]);
 
@@ -57,9 +57,9 @@ const ClassList: React.FC<ClassListProps> = ({ user }) => {
       text,
       timestamp: Date.now()
     };
-    
+
     setToastMessages(prev => [...prev, newMessage]);
-    
+
     // Auto remove after 10 seconds
     setTimeout(() => {
       removeMessage(newMessage.id);
@@ -84,25 +84,25 @@ const ClassList: React.FC<ClassListProps> = ({ user }) => {
     console.log('Fetching classes for user:', user.uid); // Debug log
     setLoading(true);
     setError('');
-    
+
     try {
       // Query lấy tất cả lớp học có teacherId = user.uid
-        const q = query(
-          collection(db, 'classes'), 
-          where('teacherId', '==', user.uid),
-          // orderBy('createdAt', 'desc')
-        );
+      const q = query(
+        collection(db, 'classes'),
+        where('teacherId', '==', user.uid),
+        // orderBy('createdAt', 'desc')
+      );
       console.log(user.uid);
-      
-      
+
+
       const querySnapshot = await getDocs(q);
       const classList: ClassData[] = [];
-      
+
       querySnapshot.forEach((doc) => {
         const data = doc.data();
         console.log('Found class:', doc.id, data); // Debug log
-        classList.push({ 
-          id: doc.id, 
+        classList.push({
+          id: doc.id,
           ...data,
           // Đảm bảo các field mặc định
           totalStudents: data.totalStudents || 0,
@@ -112,11 +112,11 @@ const ClassList: React.FC<ClassListProps> = ({ user }) => {
 
       console.log(`Loaded ${classList.length} classes for user ${user.uid}`); // Debug log
       setClasses(classList);
-      
+
       if (classList.length === 0) {
         console.log('No classes found for this user');
       }
-      
+
     } catch (error: any) {
       console.error('Lỗi khi tải danh sách lớp học:', error);
       setError('Không thể tải danh sách lớp học');
@@ -138,7 +138,7 @@ const ClassList: React.FC<ClassListProps> = ({ user }) => {
   }, [classes]);
 
   // Lọc theo từ khóa tìm kiếm
-  const filteredClasses = classes.filter(cls => 
+  const filteredClasses = classes.filter(cls =>
     cls.className.toLowerCase().includes(searchTerm.toLowerCase()) ||
     cls.subject.toLowerCase().includes(searchTerm.toLowerCase()) ||
     (cls.teacherName && cls.teacherName.toLowerCase().includes(searchTerm.toLowerCase()))
@@ -152,9 +152,9 @@ const ClassList: React.FC<ClassListProps> = ({ user }) => {
         isActive: !currentStatus,
         updatedAt: new Date()
       });
-      
+
       addMessage('success', `${!currentStatus ? 'Kích hoạt' : 'Vô hiệu hóa'} lớp học thành công`);
-      
+
       // Refresh danh sách
       await fetchClasses();
     } catch (error) {
@@ -172,7 +172,7 @@ const ClassList: React.FC<ClassListProps> = ({ user }) => {
     try {
       await deleteDoc(doc(db, 'classes', classId));
       addMessage('success', 'Xóa lớp học thành công');
-      
+
       // Refresh danh sách
       await fetchClasses();
     } catch (error) {
@@ -192,7 +192,7 @@ const ClassList: React.FC<ClassListProps> = ({ user }) => {
   // Format ngày tháng
   const formatDate = (timestamp: any) => {
     if (!timestamp) return 'N/A';
-    
+
     try {
       const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
       return date.toLocaleDateString('vi-VN', {
@@ -256,11 +256,10 @@ const ClassList: React.FC<ClassListProps> = ({ user }) => {
         {toastMessages.map((message) => (
           <div
             key={message.id}
-            className={`transform transition-all duration-300 ease-out p-4 rounded-lg shadow-lg border-l-4 ${
-              message.type === 'success'
+            className={`transform transition-all duration-300 ease-out p-4 rounded-lg shadow-lg border-l-4 ${message.type === 'success'
                 ? 'bg-white border-green-500 text-green-800'
                 : 'bg-white border-red-500 text-red-800'
-            }`}
+              }`}
             style={{
               animation: 'slideInRight 0.3s ease-out',
               animationFillMode: 'both'
@@ -301,49 +300,77 @@ const ClassList: React.FC<ClassListProps> = ({ user }) => {
       }} />
 
       <div className="mb-6">
-        <div className="flex justify-between items-center mb-4">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-800">
+        {/* Header Section */}
+        <div className="flex flex-col lg:flex-row lg:justify-between lg:items-center mb-4 gap-4">
+          <div className="flex-1">
+            <h1 className="text-2xl md:text-3xl font-bold text-gray-800">
               Lớp Học Của Tôi
             </h1>
             <p className="text-sm text-gray-500 mt-1">
               Quản lý các lớp học bạn đang giảng dạy
             </p>
           </div>
-          <div className="text-sm text-gray-600">
-            <div><span className="font-medium">Giáo viên:</span> {user.displayName || user.email}</div>
-            <div className="text-xs text-gray-500">User ID: {user.uid}</div>
+
+          {/* Teacher Info - responsive layout */}
+          <div className="text-sm text-gray-600 bg-gray-50 p-3 rounded-lg lg:bg-transparent lg:p-0">
+            <div className="flex flex-col lg:items-end">
+              <div>
+                <span className="font-medium">Giáo viên:</span>
+                <span className="block lg:inline ml-0 lg:ml-1">
+                  {user.displayName || user.email}
+                </span>
+              </div>
+              <div className="text-xs text-gray-500 mt-1 lg:mt-0">
+                User ID: {user.uid}
+              </div>
+            </div>
           </div>
         </div>
 
-        {/* Search */}
-        <div className="flex justify-between items-center mb-6">
-          <div className="flex-1 max-w-md">
+        {/* Search and Actions Section */}
+        <div className="space-y-4">
+          {/* Search Input */}
+          <div className="w-full">
             <input
               type="text"
               placeholder="Tìm kiếm lớp học, môn học..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             />
           </div>
-          <div className="flex items-center gap-4 ml-4">
-            <div className="text-sm text-gray-600">
-              <div>Hiển thị: {filteredClasses.length} lớp</div>
-              <div>Tổng: {classes.length} lớp học</div>
+
+          {/* Stats and Actions Row */}
+          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
+            {/* Stats */}
+            <div className="flex justify-center sm:justify-start gap-6 text-sm text-gray-600 bg-gray-50 p-3 rounded-lg sm:bg-transparent sm:p-0">
+              <div className="text-center sm:text-left">
+                <span className="font-medium text-blue-600">{filteredClasses.length}</span>
+                <div className="text-xs text-gray-500">Hiển thị</div>
+              </div>
+              <div className="text-center sm:text-left">
+                <span className="font-medium text-gray-700">{classes.length}</span>
+                <div className="text-xs text-gray-500">Tổng cộng</div>
+              </div>
             </div>
-            <button
-              onClick={() => navigate('/createClass')}
-              className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
-            >
-              + Tạo lớp mới
-            </button>
-            <button
-              onClick={fetchClasses}
-              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-            >
-              🔄 Làm mới
-            </button>
+
+            {/* Action Buttons */}
+            <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
+              <button
+                onClick={() => navigate('/createClass')}
+                className="px-4 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors duration-200 font-medium"
+              >
+                <span className="sm:hidden">+ Tạo lớp mới</span>
+                <span className="hidden sm:inline">+ Tạo lớp mới</span>
+              </button>
+              <button
+                onClick={fetchClasses}
+                className="px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200 font-medium"
+              >
+                <span className="sm:hidden">🔄 Làm mới</span>
+                <span className="hidden sm:inline">🔄 Làm mới</span>
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -357,9 +384,9 @@ const ClassList: React.FC<ClassListProps> = ({ user }) => {
             </svg>
           </div>
           <p className="text-gray-500 text-lg mb-4">
-            {searchTerm 
-              ? `Không tìm thấy lớp học nào phù hợp với "${searchTerm}"` 
-              : classes.length === 0 
+            {searchTerm
+              ? `Không tìm thấy lớp học nào phù hợp với "${searchTerm}"`
+              : classes.length === 0
                 ? 'Bạn chưa tạo lớp học nào'
                 : 'Danh sách trống'
             }
@@ -378,20 +405,18 @@ const ClassList: React.FC<ClassListProps> = ({ user }) => {
           {filteredClasses.map((cls) => (
             <div
               key={cls.id}
-              className={`bg-white rounded-lg shadow-md p-6 border-l-4 hover:shadow-lg transition-shadow ${
-                cls.isActive ? 'border-green-500' : 'border-red-500'
-              }`}
+              className={`bg-white rounded-lg shadow-md p-6 border-l-4 hover:shadow-lg transition-shadow ${cls.isActive ? 'border-green-500' : 'border-red-500'
+                }`}
             >
               {/* Header */}
               <div className="flex justify-between items-start mb-3">
                 <h3 className="text-xl font-semibold text-gray-800 truncate">
                   {cls.className}
                 </h3>
-                <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                  cls.isActive 
-                    ? 'bg-green-100 text-green-800' 
+                <span className={`px-2 py-1 rounded-full text-xs font-medium ${cls.isActive
+                    ? 'bg-green-100 text-green-800'
                     : 'bg-red-100 text-red-800'
-                }`}>
+                  }`}>
                   {cls.isActive ? 'Hoạt động' : 'Tạm dừng'}
                 </span>
               </div>
@@ -440,19 +465,18 @@ const ClassList: React.FC<ClassListProps> = ({ user }) => {
                 >
                   👥 Học sinh ({cls.totalStudents})
                 </button>
-                
+
                 {/* Nút toggle trạng thái */}
                 <button
                   onClick={() => toggleClassStatus(cls.id, cls.isActive)}
-                  className={`px-3 py-1 text-xs rounded-md font-medium transition-colors ${
-                    cls.isActive
+                  className={`px-3 py-1 text-xs rounded-md font-medium transition-colors ${cls.isActive
                       ? 'bg-yellow-100 text-yellow-800 hover:bg-yellow-200'
                       : 'bg-green-100 text-green-800 hover:bg-green-200'
-                  }`}
+                    }`}
                 >
                   {cls.isActive ? '⏸️ Tạm dừng' : '▶️ Kích hoạt'}
                 </button>
-                
+
                 {/* Nút xóa */}
                 <button
                   onClick={() => deleteClass(cls.id, cls.className)}

@@ -5,9 +5,6 @@ import {
     getDocs,
     query,
     where,
-    orderBy,
-    doc,
-    getDoc
 } from 'firebase/firestore';
 import { db } from '../../firebase';
 
@@ -84,7 +81,6 @@ const Attendance: React.FC<AttendanceProps> = ({ user }) => {
 
     // View states
     const [viewMode, setViewMode] = useState<'list' | 'calendar' | 'stats'>('list');
-    const [currentMonth, setCurrentMonth] = useState(new Date());
 
     // Modal states for calendar day details
     const [selectedDate, setSelectedDate] = useState<string>('');
@@ -249,6 +245,7 @@ const Attendance: React.FC<AttendanceProps> = ({ user }) => {
         if (user?.uid) {
             fetchClasses();
         }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [user]);
 
     useEffect(() => {
@@ -261,6 +258,7 @@ const Attendance: React.FC<AttendanceProps> = ({ user }) => {
             setStudents([]);
             setAttendanceRecords([]);
         }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [classes]);
 
     // Set loading to false when data fetching is complete

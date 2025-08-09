@@ -2,8 +2,8 @@ import React, { useState, useEffect, JSX } from 'react';
 import './App.css';
 import { BrowserRouter as Router, Routes, Route, Navigate, Link } from 'react-router-dom';
 import { auth, db } from './firebase';
-import { onAuthStateChanged, signInWithEmailAndPassword, signOut } from 'firebase/auth';
-import { collection, addDoc, getDocs, query, orderBy } from 'firebase/firestore';
+import { onAuthStateChanged, signOut } from 'firebase/auth';
+import { collection, getDocs, query, orderBy } from 'firebase/firestore';
 import { User } from 'firebase/auth';
 
 import SignUp from './screen/signIn/SignUpScreen';
@@ -94,6 +94,7 @@ export default function App(): JSX.Element {
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [isMenuOpen, setIsMenuOpen] = useState<boolean>(false);
+  console.log(attendanceRecords);
 
   // Function toggle menu
   const toggleMenu = (): void => {
@@ -129,35 +130,6 @@ export default function App(): JSX.Element {
       console.error('Error fetching attendance:', error);
     }
   };
-
-  // Add attendance record
-  const markAttendance = async (): Promise<void> => {
-    if (!user) return;
-
-    try {
-      await addDoc(collection(db, 'attendance'), {
-        userId: user.uid,
-        userEmail: user.email,
-        timestamp: new Date(),
-        status: 'present'
-      });
-      console.log('Attendance marked successfully');
-      fetchAttendance(); // Refresh the list
-    } catch (error) {
-      console.error('Error marking attendance:', error);
-    }
-  };
-
-  // Login function
-  const handleLogin = async (email: string, password: string): Promise<void> => {
-    try {
-      await signInWithEmailAndPassword(auth, email, password);
-    } catch (error) {
-      console.error('Login error:', error);
-      throw error;
-    }
-  };
-
   // Logout function
   const handleLogout = async (): Promise<void> => {
     try {
@@ -194,14 +166,14 @@ export default function App(): JSX.Element {
               <div className="nav-brand">
                 <h3>Lngo attendance</h3>
               </div>
-              
+
               {/* Hamburger menu button */}
               <div className={`nav-toggle ${isMenuOpen ? 'active' : ''}`} onClick={toggleMenu}>
                 <span></span>
                 <span></span>
                 <span></span>
               </div>
-              
+
               <div className={`nav-links ${isMenuOpen ? 'active' : ''}`}>
                 <Link to="/attendance" onClick={closeMenu}>Attendance</Link>
                 <Link to="/classList" onClick={closeMenu}>ClassList</Link>
@@ -215,88 +187,104 @@ export default function App(): JSX.Element {
           <main className="app-main">
             <Routes>
               {/* Public routes */}
-              <Route 
-                path="/signin" 
+              <Route
+                path="/signin"
                 element={
                   <PublicRoute>
                     <SignIn />
                   </PublicRoute>
-                } 
+                }
               />
 
-              <Route 
-                path="/signup" 
+              <Route
+                path="/signup"
                 element={
                   <PublicRoute>
                     <SignUp />
                   </PublicRoute>
-                } 
+                }
               />
 
               {/* Protected routes */}
-              <Route 
-                path="/home" 
+              <Route
+                path="/home"
                 element={
                   <ProtectedRoute>
-                    <Home/>
+                    <Home />
                   </ProtectedRoute>
-                } 
+                }
               />
-              
-              <Route 
-                path="/createClass" 
+
+              <Route
+                path="/createClass"
                 element={
                   <ProtectedRoute>
                     <CreateClass user={user} />
                   </ProtectedRoute>
-                } 
+                }
               />
-              
-              <Route 
-                path="/classList" 
+
+              <Route
+                path="/classList"
                 element={
                   <ProtectedRoute>
                     <ClassList user={user} />
                   </ProtectedRoute>
-                } 
+                }
               />
-              
-              <Route 
-                path="/classList/:classId/students" 
+
+              <Route
+                path="/classList/:classId/students"
                 element={
                   <ProtectedRoute>
                     <StudentList user={user} />
                   </ProtectedRoute>
-                } 
+                }
               />
 
-              <Route 
-                path="/attendance" 
+              <Route
+                path="/attendance"
                 element={
                   <ProtectedRoute>
                     <Attendance user={user} />
                   </ProtectedRoute>
-                } 
+                }
               />
 
               {/* Default route */}
-              <Route 
+              {/* <Route 
                 path="/" 
                 element={
                   user && user.emailVerified ? 
                     <Navigate to="/classList" replace /> : 
                     <Navigate to="/signin" replace />
                 } 
-              />
+              /> */}
 
               {/* Catch all route */}
-              <Route 
+              {/* <Route 
                 path="*" 
                 element={
                   user && user.emailVerified ? 
                     <Navigate to="/classList" replace /> : 
                     <Navigate to="/signin" replace />
                 } 
+              /> */}
+              <Route
+                path="/"
+                element={
+                  <ProtectedRoute>
+                    <SignIn />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="*"
+                element={
+                  <ProtectedRoute>
+                    <SignIn />
+                  </ProtectedRoute>
+                }
               />
             </Routes>
           </main>

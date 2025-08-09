@@ -252,40 +252,25 @@ export default function App(): JSX.Element {
               />
 
               {/* Default route */}
-              {/* <Route 
-                path="/" 
-                element={
-                  user && user.emailVerified ? 
-                    <Navigate to="/classList" replace /> : 
-                    <Navigate to="/signin" replace />
-                } 
-              /> */}
-
-              {/* Catch all route */}
-              {/* <Route 
-                path="*" 
-                element={
-                  user && user.emailVerified ? 
-                    <Navigate to="/classList" replace /> : 
-                    <Navigate to="/signin" replace />
-                } 
-              /> */}
               <Route
                 path="/"
                 element={
-                  <ProtectedRoute>
-                    <SignIn />
-                  </ProtectedRoute>
+                  user && user.emailVerified ?
+                    <Navigate to="/classList" replace /> :
+                    <Navigate to="/signin" replace />
                 }
               />
+
+              {/* Catch all route */}
               <Route
                 path="*"
                 element={
-                  <ProtectedRoute>
-                    <SignIn />
-                  </ProtectedRoute>
+                  user && user.emailVerified ?
+                    <Navigate to="/classList" replace /> :
+                    <Navigate to="/signin" replace />
                 }
               />
+
             </Routes>
           </main>
         </Router>

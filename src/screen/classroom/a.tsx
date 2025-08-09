@@ -470,6 +470,29 @@ const Attendance: React.FC<AttendanceProps> = ({ user }) => {
         );
     }
 
+    const formatDateVN = (date: Date | string, type: 0 | 1): string => {
+        if (!date) return '';
+
+        // Convert string to Date nếu cần
+        const dateObj = typeof date === 'string' ? new Date(date) : date;
+
+        // Kiểm tra date có hợp lệ không
+        if (isNaN(dateObj.getTime())) return '';
+
+        const vietnamDate = new Date(dateObj.toLocaleString("en-US", { timeZone: "Asia/Ho_Chi_Minh" }));
+
+        const day = vietnamDate.getDate().toString().padStart(2, '0');
+        const month = (vietnamDate.getMonth() + 1).toString().padStart(2, '0');
+        const year = vietnamDate.getFullYear();
+        // const hours = vietnamDate.getHours().toString().padStart(2, '0');
+        // const minutes = vietnamDate.getMinutes().toString().padStart(2, '0');
+        // eslint-disable-next-line no-cond-assign
+        if (type = 0) {
+            return `${day}-${month}-${year}`;
+        }
+        return `${day}-${month}`;
+    };
+
     return (
         <div className="max-w-7xl mx-auto p-6">
             {/* Toast Messages */}
@@ -866,34 +889,37 @@ const Attendance: React.FC<AttendanceProps> = ({ user }) => {
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                             </svg>
-                            <span className="hidden sm:inline">Tháng trước</span>
+                            <span className=" sm:inline">Tháng trước</span>
                         </button>
 
-                        <div className="text-center">
+                        <div
+                            className="text-center"
+                            onClick={() => changeMonth('current')}
+                        >
                             <h2 className="text-lg sm:text-xl font-bold text-blue-800">
                                 {selectedMonth.toLocaleDateString('vi-VN', { month: 'long', year: 'numeric' })}
                             </h2>
                             <p className="text-sm text-blue-600">
-                                {dateFrom} - {dateTo}
+                                {formatDateVN(dateFrom, 1)} - {formatDateVN(dateTo, 1)}
                             </p>
                         </div>
 
                         <button
                             onClick={() => changeMonth('next')}
-                            className="px-3 py-2 bg-white text-gray-700 rounded-md hover:bg-gray-100 shadow-sm transition-colors flex items-center gap-2"
+                            className="cursor-pointer px-3 py-2 bg-white text-gray-700 rounded-md hover:bg-gray-100 shadow-sm transition-colors flex items-center gap-2"
                         >
-                            <span className="hidden sm:inline">Tháng sau</span>
+                            <span className=" sm:inline">Tháng sau</span>
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                             </svg>
                         </button>
 
-                        <button
+                        {/* <button
                             onClick={() => changeMonth('current')}
                             className="px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 shadow-sm transition-colors text-sm"
                         >
                             Tháng này
-                        </button>
+                        </button> */}
                     </div>
 
                     {/* List View */}

@@ -51,9 +51,12 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
   }
 
   // If user is not logged in or email not verified, redirect to signup
-  if (!user || !user.emailVerified) {
-    return <Navigate to="/signup" replace />;
+
+  if (!user) {
+    return <Navigate to="/signin" replace />;
   }
+  
+
 
   return <>{children}</>;
 };

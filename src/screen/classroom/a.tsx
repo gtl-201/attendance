@@ -64,6 +64,32 @@ interface AttendanceProps {
 const Attendance: React.FC<AttendanceProps> = ({ user }) => {
     const navigate = useNavigate();
 
+    const [showFeeMessage, setShowFeeMessage] = React.useState(false);
+    const feeMessage = (
+        <div className="mt-6">
+            <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 sm:p-5 max-w-2xl mx-auto shadow-sm transition-all">
+                <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                        <span className="text-blue-500 text-xl">💬</span>
+                        <span className="font-semibold text-blue-700 text-base sm:text-lg">Thông báo học phí</span>
+                    </div>
+                    <button
+                        onClick={() => setShowFeeMessage(false)}
+                        className="text-blue-400 hover:text-blue-600 text-2xl font-bold leading-none focus:outline-none"
+                        aria-label="Đóng thông báo"
+                    >
+                        ×
+                    </button>
+                </div>
+                <div className="text-sm sm:text-base text-blue-800">
+                    Quý phụ huynh vui lòng thanh toán học phí cho các buổi học đã tham gia trong tháng này. Nếu có thắc mắc về số buổi hoặc học phí, xin liên hệ giáo viên chủ nhiệm để được hỗ trợ.
+                </div>
+                <div className="mt-2 text-xs text-blue-500">
+                    (Tin nhắn này chỉ mang tính chất tham khảo, vui lòng kiểm tra lại số buổi thực tế trước khi thanh toán.)
+                </div>
+            </div>
+        </div>
+    );
     // State management
     const [loading, setLoading] = useState(true);
     const [classes, setClasses] = useState<ClassData[]>([]);
@@ -245,7 +271,7 @@ const Attendance: React.FC<AttendanceProps> = ({ user }) => {
         if (user?.uid) {
             fetchClasses();
         }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [user]);
 
     useEffect(() => {
@@ -258,7 +284,7 @@ const Attendance: React.FC<AttendanceProps> = ({ user }) => {
             setStudents([]);
             setAttendanceRecords([]);
         }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [classes]);
 
     // Set loading to false when data fetching is complete
@@ -1823,7 +1849,23 @@ const Attendance: React.FC<AttendanceProps> = ({ user }) => {
 
                                         {/* Detailed Records */}
                                         <div>
-                                            <h4 className="text-lg font-semibold text-gray-800 mb-4">Chi tiết từng buổi học</h4>
+                                            <div className='flex justify-between align-center mb-4 flex-wrap'>
+                                                <h4 className="text-lg font-semibold text-gray-800">Chi tiết từng buổi học</h4>
+
+                                                {/* Tuition Notification Message - Toggle */}
+                                                <div className=" flex flex-col items-center">
+                                                    {!showFeeMessage ? (
+                                                        <button
+                                                            onClick={() => setShowFeeMessage(true)}
+                                                            className="px-4 py-2 bg-blue-600 text-white rounded-lg font-medium shadow hover:bg-blue-700 transition-colors text-sm sm:text-base"
+                                                        >
+                                                            💬 Xem mẫu tin nhắn thông báo học phí
+                                                        </button>
+                                                    ) : (
+                                                        feeMessage
+                                                    )}
+                                                </div>
+                                            </div>
                                             <div className="space-y-3">
                                                 {Object.entries(studentMonthlyData)
                                                     .sort(([a], [b]) => b.localeCompare(a)) // Sort by date descending
@@ -1871,6 +1913,7 @@ const Attendance: React.FC<AttendanceProps> = ({ user }) => {
                                 );
                             })()}
                         </div>
+
 
                         <div className="sticky bottom-0 bg-gray-50 px-6 py-4 border-t border-gray-200">
                             <div className="flex justify-end">

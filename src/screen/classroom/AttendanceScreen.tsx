@@ -57,6 +57,10 @@ interface AttendanceProps {
 const Attendance: React.FC<AttendanceProps> = ({ user }) => {
     const navigate = useNavigate();
 
+    // State for toggling the tuition message
+    const [showFeeMessage, setShowFeeMessage] = React.useState(false);
+
+
     // State management
     const [loading, setLoading] = useState(true);
     const [classes, setClasses] = useState<ClassData[]>([]);
@@ -80,6 +84,32 @@ const Attendance: React.FC<AttendanceProps> = ({ user }) => {
     const [selectedDate, setSelectedDate] = useState<string>('');
     const [showDateModal, setShowDateModal] = useState(false);
 
+
+    const feeMessage = (
+        <div className="mt-6">
+            <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 sm:p-5 max-w-2xl mx-auto shadow-sm transition-all">
+                <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                        <span className="text-blue-500 text-xl">💬</span>
+                        <span className="font-semibold text-blue-700 text-base sm:text-lg">Thông báo học phí</span>
+                    </div>
+                    <button
+                        onClick={() => setShowFeeMessage(false)}
+                        className="text-blue-400 hover:text-blue-600 text-2xl font-bold leading-none focus:outline-none"
+                        aria-label="Đóng thông báo"
+                    >
+                        ×
+                    </button>
+                </div>
+                <div className="text-sm sm:text-base text-blue-800">
+                    Quý phụ huynh vui lòng thanh toán học phí cho các buổi học đã tham gia trong tháng này. Nếu có thắc mắc về số buổi hoặc học phí, xin liên hệ giáo viên chủ nhiệm để được hỗ trợ.
+                </div>
+                <div className="mt-2 text-xs text-blue-500">
+                    (Tin nhắn này chỉ mang tính chất tham khảo, vui lòng kiểm tra lại số buổi thực tế trước khi thanh toán.)
+                </div>
+            </div>
+        </div>
+    );
     // Toast message functions
     const addMessage = (type: 'success' | 'error', text: string) => {
         const newMessage: ToastMessage = {
@@ -1687,8 +1717,8 @@ const Attendance: React.FC<AttendanceProps> = ({ user }) => {
                                                                     <div key={record.id} className="flex items-center justify-between p-3 bg-white border border-gray-100 rounded-lg hover:shadow-sm">
                                                                         <div className="flex items-center space-x-3">
                                                                             <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white font-bold ${record.status === 'present' ? 'bg-green-500' :
-                                                                                    record.status === 'late' ? 'bg-yellow-500' :
-                                                                                        record.status === 'absent' ? 'bg-red-500' : 'bg-purple-500'
+                                                                                record.status === 'late' ? 'bg-yellow-500' :
+                                                                                    record.status === 'absent' ? 'bg-red-500' : 'bg-purple-500'
                                                                                 }`}>
                                                                                 {getStatusIcon(record.status)}
                                                                             </div>
@@ -1725,7 +1755,11 @@ const Attendance: React.FC<AttendanceProps> = ({ user }) => {
                                     </div>
                                 );
                             })()}
+
+                            
                         </div>
+
+
 
                         <div className="sticky bottom-0 bg-gray-50 px-6 py-4 border-t border-gray-200">
                             <div className="flex justify-end">

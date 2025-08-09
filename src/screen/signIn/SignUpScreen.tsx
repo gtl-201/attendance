@@ -179,8 +179,8 @@ const SignUp: React.FC = () => {
 
           setVerificationMessage('Email đã được xác thực thành công!');
           setTimeout(() => {
-            navigate('/home');
-          }, 2000);
+            navigate('/classList');
+          }, 500);
         } else {
           setVerificationMessage('Email chưa được xác thực. Vui lòng kiểm tra hộp thư và nhấp vào liên kết xác thực.');
         }

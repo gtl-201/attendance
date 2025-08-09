@@ -13,6 +13,8 @@ import Home from './screen/HomeScreen';
 import CreateClass from './screen/classroom/CreateClassScreen';
 import ClassList from './screen/classroom/ClassListScreen';
 import StudentList from './screen/classroom/studentList';
+import Attendance from './screen/classroom/a';
+
 
 
 // Protected Route Component
@@ -81,6 +83,19 @@ function App() {
   const [user, setUser] = useState(null);
   const [attendanceRecords, setAttendanceRecords] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  // Thêm state để quản lý menu mobile
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+
+  // Function toggle menu
+  const toggleMenu = () => {
+    setIsMenuOpen(!isMenuOpen);
+  };
+
+  // Function đóng menu khi click vào link
+  const closeMenu = () => {
+    setIsMenuOpen(false);
+  };
 
   // Listen for authentication state changes
   useEffect(() => {
@@ -161,6 +176,8 @@ function App() {
     );
   }
 
+  
+
   return (
     <Router>
       {/* Navigation - only show when user is logged in */}
@@ -169,19 +186,26 @@ function App() {
           <div className="nav-brand">
             <h3>Lngo attendance</h3>
           </div>
-          <div className="nav-links">
-            {/* <Link to="/home">Home</Link> */}
-            <Link to="/createClass">CreateClass</Link>
-            <Link to="/classList">ClassList</Link>
-            {/* <Link to="/studentList">StudentList</Link> */}
-
+          
+          {/* Hamburger menu button */}
+          <div className={`nav-toggle ${isMenuOpen ? 'active' : ''}`} onClick={toggleMenu}>
+            <span></span>
+            <span></span>
+            <span></span>
           </div>
-          <div className="nav-user">
-            <span>Xin chào, {user.displayName || user.email}</span>
-            <button onClick={handleLogout} className="logout-btn">
-              Đăng xuất
-            </button>
+          
+          <div className={`nav-links ${isMenuOpen ? 'active' : ''}`}>
+            <Link to="/attendance" onClick={closeMenu}>Attendance</Link>
+            <Link to="/classList" onClick={closeMenu}>ClassList</Link>
+            {/* <div className="nav-user"> */}
+              {/* <span>Xin chào, {user.displayName || user.email}</span> */}
+              <button onClick={handleLogout} className="logout-btn">
+                Đăng xuất
+              </button>
+            {/* </div> */}
           </div>
+          
+          
         </nav>
       )}
 
@@ -189,20 +213,20 @@ function App() {
         <Routes>
           {/* Public routes */}
           <Route 
-            path="/signup" 
+            path="/signin" 
             element={
               <PublicRoute>
-                <SignUp />
+                <SignIn />
               </PublicRoute>
             } 
           />
 
           {/* Public routes */}
           <Route 
-            path="/signin" 
+            path="/signup" 
             element={
               <PublicRoute>
-                <SignIn />
+                <SignUp />
               </PublicRoute>
             } 
           />
@@ -229,7 +253,7 @@ function App() {
               </ProtectedRoute>
             } 
           />
-          <Route 
+           <Route 
             path="/classList" 
             element={
               <ProtectedRoute>
@@ -242,6 +266,15 @@ function App() {
             element={
               <ProtectedRoute>
                 <StudentList user={user} />
+              </ProtectedRoute>
+            } 
+          />
+
+          <Route 
+            path="/attendance" 
+            element={
+              <ProtectedRoute>
+                <Attendance user={user} />
               </ProtectedRoute>
             } 
           />
@@ -264,7 +297,7 @@ function App() {
             element={
               user && user.emailVerified ? 
                 <Navigate to="/classList" replace /> : 
-                <Navigate to="/signup" replace />
+                <Navigate to="/signin" replace />
             } 
           />
 

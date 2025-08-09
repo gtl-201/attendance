@@ -36,13 +36,13 @@ interface ClassData {
     totalStudents: number;
 }
 
-// Interface cho dữ liệu điểm danh
+// Interface cho dữ liệu điểm danh - Đã cập nhật để bao gồm trạng thái 'excused'
 interface AttendanceData {
     id: string;
     studentId: string;
     classId: string;
     date: string;
-    status: 'present' | 'absent' | 'late';
+    status: 'present' | 'absent' | 'late' | 'excused';
     note?: string;
     createdAt: any;
 }
@@ -74,10 +74,10 @@ const StudentList: React.FC<StudentListProps> = ({ user }) => {
     const [showAddStudent, setShowAddStudent] = useState(false);
     const [newStudentEmail, setNewStudentEmail] = useState('');
 
-    // States cho điểm danh
+    // States cho điểm danh - Đã cập nhật type để bao gồm 'excused'
     const [showAttendance, setShowAttendance] = useState(false);
     const [attendanceDate, setAttendanceDate] = useState(new Date().toISOString().split('T')[0]);
-    const [attendanceData, setAttendanceData] = useState<{ [key: string]: 'present' | 'absent' | 'late' }>({});
+    const [attendanceData, setAttendanceData] = useState<{ [key: string]: 'present' | 'absent' | 'late' | 'excused' }>({});
     const [attendanceNotes, setAttendanceNotes] = useState<{ [key: string]: string }>({});
     const [todayAttendance, setTodayAttendance] = useState<AttendanceData[]>([]);
 
@@ -168,7 +168,7 @@ const StudentList: React.FC<StudentListProps> = ({ user }) => {
             setTodayAttendance(attendanceList);
 
             // Cập nhật attendance data từ database
-            const existingAttendance: { [key: string]: 'present' | 'absent' | 'late' } = {};
+            const existingAttendance: { [key: string]: 'present' | 'absent' | 'late' | 'excused' } = {};
             const existingNotes: { [key: string]: string } = {};
 
             attendanceList.forEach(record => {
@@ -273,8 +273,8 @@ const StudentList: React.FC<StudentListProps> = ({ user }) => {
         }
     };
 
-    // Cập nhật trạng thái điểm danh với toggle
-    const updateAttendanceStatus = (studentId: string, status: 'present' | 'absent' | 'late') => {
+    // Cập nhật trạng thái điểm danh với toggle - Đã cập nhật để bao gồm 'excused'
+    const updateAttendanceStatus = (studentId: string, status: 'present' | 'absent' | 'late' | 'excused') => {
         setAttendanceData(prev => {
             const currentStatus = prev[studentId];
 
@@ -370,12 +370,13 @@ const StudentList: React.FC<StudentListProps> = ({ user }) => {
         }
     };
 
-    // Đếm số lượng theo trạng thái điểm danh
+    // Đếm số lượng theo trạng thái điểm danh - Đã cập nhật để bao gồm 'excused'
     const getAttendanceCount = () => {
         const present = Object.values(attendanceData).filter(status => status === 'present').length;
         const absent = Object.values(attendanceData).filter(status => status === 'absent').length;
         const late = Object.values(attendanceData).filter(status => status === 'late').length;
-        return { present, absent, late };
+        const excused = Object.values(attendanceData).filter(status => status === 'excused').length;
+        return { present, absent, late, excused };
     };
 
     if (!classId) {
@@ -525,7 +526,7 @@ const StudentList: React.FC<StudentListProps> = ({ user }) => {
                     </div>
                 </div>
 
-                {/* Panel điểm danh */}
+                {/* Panel điểm danh - Đã cập nhật thống kê để bao gồm 'excused' */}
                 {showAttendance && classInfo && user && user.uid === classInfo.teacherId && (
                     <div className="mb-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
                         <div className="flex justify-between items-center mb-4">
@@ -552,13 +553,14 @@ const StudentList: React.FC<StudentListProps> = ({ user }) => {
                             </div>
                         </div>
 
-                        {/* Thống kê điểm danh */}
+                        {/* Thống kê điểm danh - Đã thêm trạng thái 'Xin nghỉ' */}
                         {Object.keys(attendanceData).length > 0 && (
                             <div className="mb-4 p-3 bg-white rounded-md">
-                                <div className="flex gap-6 text-sm">
+                                <div className="flex gap-6 text-sm flex-wrap">
                                     <span className="text-green-600">✅ Có mặt: {getAttendanceCount().present}</span>
                                     <span className="text-red-600">❌ Vắng: {getAttendanceCount().absent}</span>
                                     <span className="text-yellow-600">⏰ Muộn: {getAttendanceCount().late}</span>
+                                    <span className="text-blue-600">📝 Xin nghỉ: {getAttendanceCount().excused}</span>
                                     <span className="text-gray-500">⚪ Chưa điểm danh: {filteredStudents.length - Object.keys(attendanceData).length}</span>
                                 </div>
                             </div>
@@ -598,7 +600,7 @@ const StudentList: React.FC<StudentListProps> = ({ user }) => {
                 )}
             </div>
 
-            {/* Danh sách học sinh */}
+            {/* Danh sách học sinh - Đã thêm nút 'Xin nghỉ' */}
             {filteredStudents.length === 0 ? (
                 <div className="text-center py-12">
                     <p className="text-gray-500 text-lg">
@@ -629,10 +631,10 @@ const StudentList: React.FC<StudentListProps> = ({ user }) => {
                                             </p>
                                         </div>
 
-                                        {/* Điểm danh controls */}
+                                        {/* Điểm danh controls - Đã thêm nút 'Xin nghỉ' và cải thiện layout */}
                                         {showAttendance && classInfo && user && user.uid === classInfo.teacherId && (
-                                            <div className="flex flex-col gap-2 min-w-64">
-                                                <div className="flex gap-2">
+                                            <div className="flex flex-col gap-2 min-w-80">
+                                                <div className="grid grid-cols-2 gap-2">
                                                     <button
                                                         onClick={() => updateAttendanceStatus(student.id, 'present')}
                                                         className={`px-3 py-1 text-xs rounded-md font-medium transition-all ${attendanceData[student.id] === 'present'
@@ -659,6 +661,15 @@ const StudentList: React.FC<StudentListProps> = ({ user }) => {
                                                             }`}
                                                     >
                                                         ❌ Vắng
+                                                    </button>
+                                                    <button
+                                                        onClick={() => updateAttendanceStatus(student.id, 'excused')}
+                                                        className={`px-3 py-1 text-xs rounded-md font-medium transition-all ${attendanceData[student.id] === 'excused'
+                                                            ? 'bg-blue-500 text-white shadow-md'
+                                                            : 'bg-blue-100 text-blue-800 hover:bg-blue-200'
+                                                            }`}
+                                                    >
+                                                        📝 Xin nghỉ
                                                     </button>
                                                 </div>
                                                 <input

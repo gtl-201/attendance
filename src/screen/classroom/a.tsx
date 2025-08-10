@@ -112,6 +112,13 @@ const Attendance: React.FC<AttendanceProps> = ({ user }) => {
     const [selectedDate, setSelectedDate] = useState<string>('');
     const [showDateModal, setShowDateModal] = useState(false);
 
+    // Search states for classes and students searchable dropdowns
+    const [classSearchTerm, setClassSearchTerm] = useState('');
+    const [studentSearchTerm, setStudentSearchTerm] = useState('');
+    const [showClassDropdown, setShowClassDropdown] = useState(false);
+    const [showStudentDropdown, setShowStudentDropdown] = useState(false);
+
+
     // New states for monthly view and student details
     const [selectedMonth, setSelectedMonth] = useState(new Date());
     const [selectedStudentDetails, setSelectedStudentDetails] = useState<{
@@ -120,6 +127,8 @@ const Attendance: React.FC<AttendanceProps> = ({ user }) => {
         month: string;
     } | null>(null);
     const [showStudentModal, setShowStudentModal] = useState(false);
+
+
 
     // Initialize date filters to current month
     useEffect(() => {
@@ -700,7 +709,7 @@ const Attendance: React.FC<AttendanceProps> = ({ user }) => {
                             return (
                                 <>
                                     {/* Filters */}
-                                    <div className="bg-white rounded-lg shadow-md mb-6 overflow-hidden">
+                                    <div className="bg-white rounded-lg shadow-md mb-6">
                                         {/* Mobile Filter Header - Always visible */}
                                         <div className="p-4 sm:pb-4 sm:mb-0">
                                             <div className="flex items-center justify-between">
@@ -757,40 +766,165 @@ const Attendance: React.FC<AttendanceProps> = ({ user }) => {
                                             <div className="px-4 pb-4 sm:px-0 sm:pb-0">
                                                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4">
                                                     {/* Class Filter */}
-                                                    <div>
+                                                    <div className="relative">
                                                         <label className="block text-sm font-medium text-gray-700 mb-1">Lớp học</label>
-                                                        <select
-                                                            value={selectedClass}
-                                                            onChange={(e) => {
-                                                                setSelectedClass(e.target.value);
-                                                                setSelectedStudent('all'); // Reset student filter
-                                                            }}
-                                                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm touch-manipulation"
-                                                        >
-                                                            <option value="all">Tất cả lớp</option>
-                                                            {classes.map(cls => (
-                                                                <option key={cls.id} value={cls.id}>
-                                                                    {cls.className} - {cls.subject}
-                                                                </option>
-                                                            ))}
-                                                        </select>
+                                                        <div className="relative">
+                                                            <input
+                                                                type="text"
+                                                                value={classSearchTerm}
+                                                                onChange={(e) => {
+                                                                    setClassSearchTerm(e.target.value);
+                                                                    setShowClassDropdown(true);
+                                                                }}
+                                                                onFocus={() => setShowClassDropdown(true)}
+                                                                placeholder="Tìm kiếm lớp học..."
+                                                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm touch-manipulation"
+                                                            />
+                                                            <div className="absolute right-2 top-1/2 transform -translate-y-1/2 pointer-events-none">
+                                                                <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                                                </svg>
+                                                            </div>
+                                                        </div>
+
+                                                        {/* Dropdown */}
+                                                        {showClassDropdown && (
+                                                            <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60">
+                                                                {/* Option "Tất cả lớp" */}
+                                                                <div
+                                                                    onClick={() => {
+                                                                        setSelectedClass('all');
+                                                                        setClassSearchTerm('');
+                                                                        setShowClassDropdown(false);
+                                                                        setSelectedStudent('all'); // Reset student filter
+                                                                    }}
+                                                                    className="px-3 py-2 hover:bg-gray-100 cursor-pointer text-sm border-b border-gray-100"
+                                                                >
+                                                                    <div className="font-medium">Tất cả lớp</div>
+                                                                </div>
+
+                                                                {/* Filtered classes */}
+                                                                {classes
+                                                                    .filter(cls =>
+                                                                        cls.className.toLowerCase().includes(classSearchTerm.toLowerCase()) ||
+                                                                        cls.subject.toLowerCase().includes(classSearchTerm.toLowerCase())
+                                                                    )
+                                                                    .map(cls => (
+                                                                        <div
+                                                                            key={cls.id}
+                                                                            onClick={() => {
+                                                                                setSelectedClass(cls.id);
+                                                                                setClassSearchTerm(`${cls.className} - ${cls.subject}`);
+                                                                                setShowClassDropdown(false);
+                                                                                setSelectedStudent('all'); // Reset student filter
+                                                                            }}
+                                                                            className="px-3 py-2 hover:bg-gray-100 cursor-pointer text-sm"
+                                                                        >
+                                                                            <div className="font-medium">{cls.className}</div>
+                                                                            <div className="text-gray-500 text-xs">{cls.subject}</div>
+                                                                        </div>
+                                                                    ))
+                                                                }
+
+                                                                {/* No results */}
+                                                                {classes.filter(cls =>
+                                                                    cls.className.toLowerCase().includes(classSearchTerm.toLowerCase()) ||
+                                                                    cls.subject.toLowerCase().includes(classSearchTerm.toLowerCase())
+                                                                ).length === 0 && classSearchTerm && (
+                                                                        <div className="px-3 py-2 text-sm text-gray-500">
+                                                                            Không tìm thấy lớp học phù hợp
+                                                                        </div>
+                                                                    )}
+                                                            </div>
+                                                        )}
+
+                                                        {/* Click outside to close */}
+                                                        {showClassDropdown && (
+                                                            <div
+                                                                className="fixed inset-0 z-40"
+                                                                onClick={() => setShowClassDropdown(false)}
+                                                            ></div>
+                                                        )}
                                                     </div>
 
                                                     {/* Student Filter */}
-                                                    <div>
+                                                    <div className="relative">
                                                         <label className="block text-sm font-medium text-gray-700 mb-1">Học sinh</label>
-                                                        <select
-                                                            value={selectedStudent}
-                                                            onChange={(e) => setSelectedStudent(e.target.value)}
-                                                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm touch-manipulation"
-                                                        >
-                                                            <option value="all">Tất cả học sinh</option>
-                                                            {filteredStudents.map(student => (
-                                                                <option key={student.id} value={student.id}>
-                                                                    {student.studentName}
-                                                                </option>
-                                                            ))}
-                                                        </select>
+                                                        <div className="relative">
+                                                            <input
+                                                                type="text"
+                                                                value={studentSearchTerm}
+                                                                onChange={(e) => {
+                                                                    setStudentSearchTerm(e.target.value);
+                                                                    setShowStudentDropdown(true);
+                                                                }}
+                                                                onFocus={() => setShowStudentDropdown(true)}
+                                                                placeholder="Tìm kiếm học sinh..."
+                                                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm touch-manipulation"
+                                                            />
+                                                            <div className="absolute right-2 top-1/2 transform -translate-y-1/2 pointer-events-none">
+                                                                <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                                                </svg>
+                                                            </div>
+                                                        </div>
+
+                                                        {/* Dropdown */}
+                                                        {showStudentDropdown && (
+                                                            <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-y-auto">
+                                                                {/* Option "Tất cả học sinh" */}
+                                                                <div
+                                                                    onClick={() => {
+                                                                        setSelectedStudent('all');
+                                                                        setStudentSearchTerm('');
+                                                                        setShowStudentDropdown(false);
+                                                                    }}
+                                                                    className="px-3 py-2 hover:bg-gray-100 cursor-pointer text-sm border-b border-gray-100"
+                                                                >
+                                                                    <div className="font-medium">Tất cả học sinh</div>
+                                                                </div>
+
+                                                                {/* Filtered students */}
+                                                                {filteredStudents
+                                                                    .filter(student =>
+                                                                        student.studentName.toLowerCase().includes(studentSearchTerm.toLowerCase()) ||
+                                                                        student.studentEmail.toLowerCase().includes(studentSearchTerm.toLowerCase())
+                                                                    )
+                                                                    .map(student => (
+                                                                        <div
+                                                                            key={student.id}
+                                                                            onClick={() => {
+                                                                                setSelectedStudent(student.id);
+                                                                                setStudentSearchTerm(student.studentName);
+                                                                                setShowStudentDropdown(false);
+                                                                            }}
+                                                                            className="px-3 py-2 hover:bg-gray-100 cursor-pointer text-sm"
+                                                                        >
+                                                                            <div className="font-medium">{student.studentName}</div>
+                                                                            <div className="text-gray-500 text-xs">{student.studentEmail}</div>
+                                                                        </div>
+                                                                    ))
+                                                                }
+
+                                                                {/* No results */}
+                                                                {filteredStudents.filter(student =>
+                                                                    student.studentName.toLowerCase().includes(studentSearchTerm.toLowerCase()) ||
+                                                                    student.studentEmail.toLowerCase().includes(studentSearchTerm.toLowerCase())
+                                                                ).length === 0 && studentSearchTerm && (
+                                                                        <div className="px-3 py-2 text-sm text-gray-500">
+                                                                            Không tìm thấy học sinh phù hợp
+                                                                        </div>
+                                                                    )}
+                                                            </div>
+                                                        )}
+
+                                                        {/* Click outside to close */}
+                                                        {showStudentDropdown && (
+                                                            <div
+                                                                className="fixed inset-0 z-40"
+                                                                onClick={() => setShowStudentDropdown(false)}
+                                                            ></div>
+                                                        )}
                                                     </div>
 
                                                     {/* Date From */}
@@ -839,6 +973,8 @@ const Attendance: React.FC<AttendanceProps> = ({ user }) => {
                                                                 setSelectedClass('all');
                                                                 setSelectedStudent('all');
                                                                 setStatusFilter('all');
+                                                                setClassSearchTerm(''); // Thêm dòng này
+                                                                setStudentSearchTerm(''); // Thêm dòng này
                                                             }}
                                                             className="w-full px-3 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 active:bg-gray-400 text-sm touch-manipulation font-medium transition-colors"
                                                         >

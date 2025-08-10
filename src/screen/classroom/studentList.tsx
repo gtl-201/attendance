@@ -22,6 +22,7 @@ interface StudentData {
     classId: string;
     enrolledAt: any;
     status: 'active' | 'inactive';
+    description?: string; // Thêm dòng này
 }
 
 // Interface cho dữ liệu lớp học
@@ -427,6 +428,18 @@ const StudentList: React.FC<StudentListProps> = ({ user }) => {
         return { present, absent, late, excused, makeup }; // Thêm makeup vào return
     };
 
+    //Thay đổi trạng thái của học sinh
+    const toggleStudentStatus = async (student: StudentData) => {
+        try {
+            const newStatus = student.status === 'active' ? 'inactive' : 'active';
+            await updateDoc(doc(db, 'enrollments', student.id), { status: newStatus });
+            addMessage('success', `Đã chuyển trạng thái học sinh "${student.studentName}"`);
+            fetchStudents();
+        } catch (error) {
+            addMessage('error', 'Không thể thay đổi trạng thái học sinh');
+        }
+    };
+
     if (!classId) {
         return (
             <div className="text-center py-12">
@@ -744,7 +757,8 @@ const StudentList: React.FC<StudentListProps> = ({ user }) => {
                                             <h3 className="text-lg font-semibold text-gray-800 mb-1">
                                                 {student.studentName}
                                             </h3>
-                                            <p className="text-sm text-gray-600 mb-1">{student.studentEmail}</p>
+                                            <p className="text-sm text-gray-600">{student.description || ''}</p>
+                                            <p className="text-xs text-blue-600">{classInfo?.className || ''}</p>
                                             <p className="text-xs text-gray-500">
                                                 Ngày tham gia: {formatDate(student.enrolledAt)}
                                             </p>
@@ -861,11 +875,21 @@ const StudentList: React.FC<StudentListProps> = ({ user }) => {
                                 {!showAttendance && classInfo && user && user.uid === classInfo.teacherId && (
                                     <div className="mt-3 pt-3 border-t border-gray-200">
                                         <button
+                                            onClick={() => toggleStudentStatus(student)}
+                                            className={`w-full mt-2 px-4 py-2 text-sm rounded-lg font-medium border transition-colors ${student.status === 'active'
+                                                ? 'bg-yellow-50 text-yellow-700 border-yellow-200 hover:bg-yellow-100'
+                                                : 'bg-green-50 text-green-700 border-green-200 hover:bg-green-100'
+                                                }`}
+                                        >
+                                            {student.status === 'active' ? 'Chuyển sang Ngưng học' : 'Chuyển sang Đang học'}
+                                        </button>
+                                        <button
                                             onClick={() => removeStudent(student.id, student.studentName)}
-                                            className="w-full px-4 py-2 text-sm rounded-lg font-medium bg-red-50 text-red-700 hover:bg-red-100 border border-red-200 transition-colors"
+                                            className="w-full px-4 py-2 mt-2 text-sm rounded-lg font-medium bg-red-50 text-red-700 hover:bg-red-100 border border-red-200 transition-colors"
                                         >
                                             🗑️ Xóa học sinh
                                         </button>
+
                                     </div>
                                 )}
                             </div>
@@ -881,7 +905,8 @@ const StudentList: React.FC<StudentListProps> = ({ user }) => {
                                             <h3 className="text-lg font-semibold text-gray-800">
                                                 {student.studentName}
                                             </h3>
-                                            <p className="text-sm text-gray-600">{student.studentEmail}</p>
+                                            <p className="text-sm text-gray-600 mb-1">{student.description || ''}</p>
+                                            <p className="text-xs text-blue-600">{classInfo?.className || ''}</p>
                                             <p className="text-xs text-gray-500">
                                                 Ngày tham gia: {formatDate(student.enrolledAt)}
                                             </p>
@@ -970,11 +995,21 @@ const StudentList: React.FC<StudentListProps> = ({ user }) => {
                                     <div className="flex items-center gap-3">
                                         <div className="flex gap-2">
                                             <button
+                                                onClick={() => toggleStudentStatus(student)}
+                                                className={`px-3 py-1 text-xs rounded-md font-medium border transition-colors ${student.status === 'active'
+                                                    ? 'bg-yellow-50 text-yellow-700 border-yellow-200 hover:bg-yellow-100'
+                                                    : 'bg-green-50 text-green-700 border-green-200 hover:bg-green-100'
+                                                    }`}
+                                            >
+                                                {student.status === 'active' ? 'Ngưng học' : 'Đang học'}
+                                            </button>
+                                            <button
                                                 onClick={() => removeStudent(student.id, student.studentName)}
                                                 className="px-3 py-1 text-xs rounded-md font-medium bg-red-100 text-red-800 hover:bg-red-200"
                                             >
                                                 Xóa
                                             </button>
+
                                         </div>
                                     </div>
                                 )}

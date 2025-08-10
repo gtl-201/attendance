@@ -30,12 +30,13 @@
 
 /* Base styles cho desktop */
 .app-nav {
+  width: 100%;
+  background: #fff;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.03);
+  padding: 0.5rem 1rem;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 1rem 2rem;
-  background-color: #fff;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 .nav-brand h3 {
@@ -43,10 +44,38 @@
   color: #333;
 }
 
+.nav-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.nav-title {
+  font-size: 1.2rem;
+  font-weight: bold;
+  margin: 0;
+}
+
+.nav-toggle {
+  display: none;
+  flex-direction: column;
+  cursor: pointer;
+  margin-left: 1rem;
+}
+
+.nav-toggle span {
+  height: 3px;
+  width: 25px;
+  background: #333;
+  margin: 4px 0;
+  border-radius: 2px;
+  transition: 0.3s;
+}
+
 .nav-links {
   display: flex;
-  gap: 2rem;
   align-items: center;
+  gap: 1rem;
 }
 
 .nav-links a {
@@ -63,10 +92,10 @@
 }
 
 .logout-btn {
-  background-color: #dc3545;
-  color: white;
+  background: #e53e3e;
+  color: #fff;
   border: none;
-  padding: 0.5rem 1rem;
+  padding: 0.4rem 1rem;
   border-radius: 4px;
   cursor: pointer;
   width: fit-content;
@@ -178,6 +207,33 @@
 
   .nav-toggle.active span:nth-child(3) {
     transform: rotate(45deg) translate(-5px, -6px);
+  }
+
+  .nav-header {
+    flex-direction: row;
+    justify-content: space-between;
+  }
+
+  .nav-links {
+    flex-direction: column;
+    align-items: flex-start;
+    background: #fff;
+    position: absolute;
+    top: 56px;
+    left: 0;
+    width: 100%;
+    padding: 1rem;
+    display: none;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    z-index: 10;
+  }
+
+  .nav-links.active {
+    display: flex;
+  }
+
+  .nav-toggle {
+    display: flex;
   }
 }
 

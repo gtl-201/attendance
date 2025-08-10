@@ -166,20 +166,18 @@ export default function App(): JSX.Element {
           {/* Navigation - only show when user is logged in */}
           {user && user.emailVerified && (
             <nav className="app-nav">
-              <div className="nav-brand">
-                <h3>Lngo attendance</h3>
+              <div className="nav-header">
+                <h3 className="nav-title">Happy Happy</h3>
+                {/* Hamburger menu button */}
+                <div className={`nav-toggle ${isMenuOpen ? 'active' : ''}`} onClick={toggleMenu}>
+                  <span></span>
+                  <span></span>
+                  <span></span>
+                </div>
               </div>
-
-              {/* Hamburger menu button */}
-              <div className={`nav-toggle ${isMenuOpen ? 'active' : ''}`} onClick={toggleMenu}>
-                <span></span>
-                <span></span>
-                <span></span>
-              </div>
-
               <div className={`nav-links ${isMenuOpen ? 'active' : ''}`}>
-                <Link to="/attendance" onClick={closeMenu}>Attendance</Link>
-                <Link to="/classList" onClick={closeMenu}>ClassList</Link>
+                <Link to="/attendance" onClick={closeMenu}>Điểm Danh</Link>
+                <Link to="/classList" onClick={closeMenu}>Quản Lý Lớp</Link>
                 <button onClick={handleLogout} className="logout-btn">
                   Đăng xuất
                 </button>

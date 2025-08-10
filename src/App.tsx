@@ -55,7 +55,7 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
   if (!user) {
     return <Navigate to="/signin" replace />;
   }
-  
+
 
 
   return <>{children}</>;
@@ -238,6 +238,14 @@ export default function App(): JSX.Element {
 
               <Route
                 path="/classList/:classId/students"
+                element={
+                  <ProtectedRoute>
+                    <StudentList user={user} />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/studentList"
                 element={
                   <ProtectedRoute>
                     <StudentList user={user} />

@@ -5,10 +5,17 @@ import {
     getDocs,
     query,
     where,
+    doc,
+    setDoc,
+    getDoc,
+    updateDoc,
 } from 'firebase/firestore';
 import { db } from '../../firebase';
 
 // Interfaces
+interface PaymentStatus {
+    [key: string]: 'paid' | 'unpaid'; // key: `${studentId}_${classId}_${month}` (month: YYYY-MM)
+}
 interface AttendanceData {
     id: string;
     studentId: string;
@@ -63,7 +70,123 @@ interface AttendanceProps {
 
 const Attendance: React.FC<AttendanceProps> = ({ user }) => {
     const navigate = useNavigate();
+    const [paymentStatus, setPaymentStatus] = useState<PaymentStatus>({});
+    // Helper: Lấy key cho trạng thái đóng tiền
+    const getPaymentKey = (studentId: string, classId: string, month: string) =>
+        `${studentId}_${classId}_${month}`;
 
+    // Helper: Lấy tháng hiện tại đang lọc (YYYY-MM)
+    const getCurrentMonth = () => {
+        if (!dateFrom) return '';
+        return dateFrom.slice(0, 7);
+    };
+    // Fetch trạng thái đóng tiền từ Firestore
+    const fetchPaymentStatus = async () => {
+        if (!user?.uid || classes.length === 0) return;
+
+        const months = getMonthsInRange(dateFrom, dateTo);
+        if (months.length === 0) return;
+
+        try {
+            const status: PaymentStatus = {};
+
+            // Fetch payment status for all months in range
+            for (const month of months) {
+                const q = query(
+                    collection(db, 'paymentStatus'),
+                    where('teacherId', '==', user.uid),
+                    where('month', '==', month)
+                );
+                const querySnapshot = await getDocs(q);
+
+                querySnapshot.forEach((doc) => {
+                    const data = doc.data();
+                    const key = getPaymentKey(data.studentId, data.classId, data.month);
+                    status[key] = data.status;
+                });
+            }
+
+            setPaymentStatus(status);
+        } catch (error) {
+            console.error('Lỗi khi tải trạng thái đóng tiền:', error);
+        }
+    };
+    //helper function để lấy tất cả tháng trong range
+    const getMonthsInRange = (dateFrom: string, dateTo: string): string[] => {
+        if (!dateFrom || !dateTo) return [];
+
+        const months: string[] = [];
+        const start = new Date(dateFrom);
+        const end = new Date(dateTo);
+
+        // Set to first day of month to avoid date boundary issues
+        const current = new Date(start.getFullYear(), start.getMonth(), 1);
+        const endMonth = new Date(end.getFullYear(), end.getMonth(), 1);
+
+        while (current <= endMonth) {
+            const month = `${current.getFullYear()}-${String(current.getMonth() + 1).padStart(2, '0')}`;
+            months.push(month);
+            current.setMonth(current.getMonth() + 1);
+        }
+
+        return months;
+    };
+    const togglePaymentStatusForMonth = async (studentId: string, classId: string, month: string) => {
+        const key = getPaymentKey(studentId, classId, month);
+        const current = paymentStatus[key] || 'unpaid';
+        const newStatus = current === 'paid' ? 'unpaid' : 'paid';
+
+        try {
+            const docId = key;
+            const ref = doc(db, 'paymentStatus', docId);
+            const docSnap = await getDoc(ref);
+
+            if (docSnap.exists()) {
+                await updateDoc(ref, { status: newStatus });
+            } else {
+                await setDoc(ref, {
+                    studentId,
+                    classId,
+                    month,
+                    status: newStatus,
+                    teacherId: user.uid,
+                    updatedAt: new Date(),
+                });
+            }
+
+            setPaymentStatus((prev) => ({
+                ...prev,
+                [key]: newStatus,
+            }));
+
+            const monthName = new Date(month + '-01').toLocaleDateString('vi-VN', {
+                month: 'long',
+                year: 'numeric'
+            });
+            addMessage('success', `Đã cập nhật trạng thái đóng tiền tháng ${monthName}!`);
+        } catch (error) {
+            addMessage('error', 'Lỗi khi cập nhật trạng thái đóng tiền');
+        }
+    };
+
+    // Gọi fetchPaymentStatus khi đổi tháng hoặc danh sách lớp
+
+    // Hàm toggle trạng thái đóng tiền
+    const togglePaymentStatus = async (studentId: string, classId: string) => {
+        const months = getMonthsInRange(dateFrom, dateTo);
+
+        // Nếu chỉ có 1 tháng, toggle cho tháng đó
+        if (months.length === 1) {
+            await togglePaymentStatusForMonth(studentId, classId, months[0]);
+            return;
+        }
+
+        // Nếu có nhiều tháng, toggle cho tháng hiện tại
+        const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM
+        const targetMonth = months.includes(currentMonth) ? currentMonth : months[0];
+
+        await togglePaymentStatusForMonth(studentId, classId, targetMonth);
+    };
     const [showFeeMessage, setShowFeeMessage] = React.useState(false);
     const feeMessage = (
         <div className="mt-6">
@@ -129,6 +252,10 @@ const Attendance: React.FC<AttendanceProps> = ({ user }) => {
     const [showStudentModal, setShowStudentModal] = useState(false);
 
 
+    useEffect(() => {
+        fetchPaymentStatus();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [classes, dateFrom, dateTo]);
 
     // Initialize date filters to current month
     useEffect(() => {
@@ -1219,6 +1346,9 @@ const Attendance: React.FC<AttendanceProps> = ({ user }) => {
                                                                         <span className="block sm:hidden">Tiền</span>
                                                                         <span className="hidden sm:block">Tổng tiền</span>
                                                                     </th>
+                                                                    <th className="px-2 sm:px-6 py-2 sm:py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                                        Đóng tiền
+                                                                    </th>
                                                                 </tr>
                                                             </thead>
                                                             <tbody className="bg-white divide-y divide-gray-200">
@@ -1278,6 +1408,65 @@ const Attendance: React.FC<AttendanceProps> = ({ user }) => {
                                                                                 {stats.present + stats.late + stats.absent} buổi tính phí
                                                                             </div>
                                                                         </td>
+                                                                        <td className="px-2 sm:px-6 py-2 sm:py-4 text-center">
+                                                                            {(() => {
+                                                                                const months = getMonthsInRange(dateFrom, dateTo);
+
+                                                                                // Nếu chỉ có 1 tháng, hiển thị như cũ
+                                                                                if (months.length === 1) {
+                                                                                    const month = months[0];
+                                                                                    const key = getPaymentKey(studentId, classId, month);
+                                                                                    const paid = paymentStatus[key] === 'paid';
+
+                                                                                    return (
+                                                                                        <button
+                                                                                            onClick={e => {
+                                                                                                e.stopPropagation();
+                                                                                                togglePaymentStatus(studentId, classId);
+                                                                                            }}
+                                                                                            className={`px-3 py-1 rounded-full text-xs font-bold transition-colors ${paid
+                                                                                                ? 'bg-green-100 text-green-700 border border-green-400'
+                                                                                                : 'bg-red-100 text-red-700 border border-red-400'
+                                                                                                }`}
+                                                                                            title={paid ? 'Đã đóng' : 'Chưa đóng'}
+                                                                                        >
+                                                                                            {paid ? 'Đã đóng' : 'Chưa đóng'}
+                                                                                        </button>
+                                                                                    );
+                                                                                }
+
+                                                                                // Nếu có nhiều tháng, hiển thị từng tháng
+                                                                                return (
+                                                                                    <div className="space-y-1">
+                                                                                        {months.map(month => {
+                                                                                            const key = getPaymentKey(studentId, classId, month);
+                                                                                            const paid = paymentStatus[key] === 'paid';
+                                                                                            const monthName = new Date(month + '-01').toLocaleDateString('vi-VN', {
+                                                                                                month: 'short'
+                                                                                            });
+
+                                                                                            return (
+                                                                                                <button
+                                                                                                    key={month}
+                                                                                                    onClick={e => {
+                                                                                                        e.stopPropagation();
+                                                                                                        togglePaymentStatusForMonth(studentId, classId, month);
+                                                                                                    }}
+                                                                                                    className={`w-full px-2 py-0.5 rounded text-xs font-bold transition-colors ${paid
+                                                                                                        ? 'bg-green-100 text-green-700 border border-green-400'
+                                                                                                        : 'bg-red-100 text-red-700 border border-red-400'
+                                                                                                        }`}
+                                                                                                    title={`${monthName}: ${paid ? 'Đã đóng' : 'Chưa đóng'}`}
+                                                                                                >
+                                                                                                    <span className="block text-xs">{monthName}</span>
+                                                                                                    <span className="block text-xs">{paid ? '✓' : '✗'}</span>
+                                                                                                </button>
+                                                                                            );
+                                                                                        })}
+                                                                                    </div>
+                                                                                );
+                                                                            })()}
+                                                                        </td>
                                                                     </tr>
                                                                 ))}
                                                             </tbody>
@@ -1317,6 +1506,8 @@ const Attendance: React.FC<AttendanceProps> = ({ user }) => {
                                                                             })()}
                                                                         </div>
                                                                     </td>
+                                                                    <td></td>
+                                                                    
                                                                 </tr>
                                                             </tfoot>
                                                         </table>

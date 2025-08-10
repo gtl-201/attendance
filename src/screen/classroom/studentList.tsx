@@ -75,6 +75,7 @@ const StudentList: React.FC<StudentListProps> = ({ user }) => {
 
     const [showAddStudent, setShowAddStudent] = useState(false);
     const [newStudentEmail, setNewStudentEmail] = useState('');
+    const [newStudentDescription, setNewStudentDescription] = useState(''); // Thêm state cho mô tả
 
     // States cho điểm danh - Đã cập nhật type để bao gồm 'excused'
     const [showAttendance, setShowAttendance] = useState(false);
@@ -83,6 +84,10 @@ const StudentList: React.FC<StudentListProps> = ({ user }) => {
     const [attendanceNotes, setAttendanceNotes] = useState<{ [key: string]: string }>({});
     const [todayAttendance, setTodayAttendance] = useState<AttendanceData[]>([]);
     const [makeupFees, setMakeupFees] = useState<{ [key: string]: number }>({});
+
+    // Thêm state cho allClasses và studentsByClass
+    const [allClasses, setAllClasses] = useState<ClassData[]>([]);
+    const [studentsByClass, setStudentsByClass] = useState<{ [classId: string]: StudentData[] }>({});
 
     // Function to add toast message
     const addMessage = (type: 'success' | 'error', text: string) => {
@@ -189,13 +194,44 @@ const StudentList: React.FC<StudentListProps> = ({ user }) => {
         }
     };
 
+    // Fetch tất cả lớp và học sinh nếu không có classId
+    const fetchAllClassesAndStudents = async () => {
+        if (!user?.uid) return;
+        setLoading(true);
+        try {
+            // Lấy tất cả lớp của giáo viên
+            const q = query(collection(db, 'classes'), where('teacherId', '==', user.uid));
+            const classSnapshot = await getDocs(q);
+            const classes: ClassData[] = [];
+            for (const docSnap of classSnapshot.docs) {
+                classes.push({ id: docSnap.id, ...docSnap.data() } as ClassData);
+            }
+            setAllClasses(classes);
+
+            // Lấy học sinh của từng lớp
+            const studentsMap: { [classId: string]: StudentData[] } = {};
+            for (const classItem of classes) {
+                const sq = query(collection(db, 'enrollments'), where('classId', '==', classItem.id));
+                const studentSnapshot = await getDocs(sq);
+                studentsMap[classItem.id] = studentSnapshot.docs.map(d => ({ id: d.id, ...d.data() } as StudentData));
+            }
+            setStudentsByClass(studentsMap);
+        } catch (error) {
+            addMessage('error', 'Không thể tải danh sách lớp và học sinh');
+        } finally {
+            setLoading(false);
+        }
+    };
+
     // Load dữ liệu khi component mount
     useEffect(() => {
         if (classId) {
             fetchClassInfo();
             fetchStudents();
+        } else if (user?.uid) {
+            fetchAllClassesAndStudents();
         }
-    }, [classId]);
+    }, [classId, user?.uid]);
 
     // Fetch điểm danh khi thay đổi ngày
     useEffect(() => {
@@ -224,12 +260,13 @@ const StudentList: React.FC<StudentListProps> = ({ user }) => {
 
             // Thêm enrollment mới
             const enrollmentData = {
-                studentId: 'pending', // Sẽ được cập nhật khi học sinh đăng ký
-                studentName: newStudentEmail.split('@')[0], // Tạm thời dùng phần trước @ làm tên
+                studentId: 'pending',
+                studentName: newStudentEmail.split('@')[0],
                 studentEmail: newStudentEmail.trim(),
                 classId: classId,
                 enrolledAt: new Date(),
-                status: 'active'
+                status: 'active',
+                description: newStudentDescription.trim() // Thêm mô tả
             };
 
             await addDoc(collection(db, 'enrollments'), enrollmentData);
@@ -245,6 +282,7 @@ const StudentList: React.FC<StudentListProps> = ({ user }) => {
 
             addMessage('success', 'Thêm học sinh thành công');
             setNewStudentEmail('');
+            setNewStudentDescription(''); // Reset mô tả
             setShowAddStudent(false);
             fetchStudents();
         } catch (error) {
@@ -254,7 +292,7 @@ const StudentList: React.FC<StudentListProps> = ({ user }) => {
     };
 
     // Xóa học sinh khỏi lớp
-    const removeStudent = async (studentId: string, studentName: string) => {
+    const removeStudent = async (studentId: string, studentName: string, classIdArg?: string) => {
         if (!window.confirm(`Bạn có chắc chắn muốn xóa học sinh "${studentName}" khỏi lớp?`)) {
             return;
         }
@@ -263,16 +301,19 @@ const StudentList: React.FC<StudentListProps> = ({ user }) => {
             await deleteDoc(doc(db, 'enrollments', studentId));
 
             // Cập nhật tổng số học sinh
-            if (classInfo && classId) {
-                const classRef = doc(db, 'classes', classId);
+            const updateClassId = classIdArg || classId;
+            if (updateClassId) {
+                const classRef = doc(db, 'classes', updateClassId);
+                // Không cần students.length, chỉ giảm đi 1
                 await updateDoc(classRef, {
-                    totalStudents: Math.max(0, students.length - 1),
+                    totalStudents: Math.max(0, (classInfo?.totalStudents || 1) - 1),
                     updatedAt: new Date()
                 });
             }
 
             addMessage('success', 'Xóa học sinh thành công');
-            fetchStudents();
+            if (classId) fetchStudents();
+            else fetchAllClassesAndStudents();
         } catch (error) {
             console.error('Lỗi khi xóa học sinh:', error);
             addMessage('error', 'Không thể xóa học sinh');
@@ -429,27 +470,98 @@ const StudentList: React.FC<StudentListProps> = ({ user }) => {
     };
 
     //Thay đổi trạng thái của học sinh
-    const toggleStudentStatus = async (student: StudentData) => {
+    const toggleStudentStatus = async (student: StudentData, classIdArg?: string) => {
         try {
             const newStatus = student.status === 'active' ? 'inactive' : 'active';
             await updateDoc(doc(db, 'enrollments', student.id), { status: newStatus });
             addMessage('success', `Đã chuyển trạng thái học sinh "${student.studentName}"`);
-            fetchStudents();
+            if (classId) fetchStudents();
+            else fetchAllClassesAndStudents();
         } catch (error) {
             addMessage('error', 'Không thể thay đổi trạng thái học sinh');
         }
     };
 
     if (!classId) {
+        if (loading) {
+            return (
+                <div className="flex justify-center items-center min-h-screen">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+                    <p className="ml-4">Đang tải danh sách lớp và học sinh...</p>
+                </div>
+            );
+        }
+        if (allClasses.length === 0) {
+            return (
+                <div className="text-center py-12">
+                    <p className="text-gray-500 text-lg">Bạn chưa sở hữu lớp học nào.</p>
+                    <button
+                        onClick={() => navigate('/classList')}
+                        className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                    >
+                        Quay lại danh sách lớp
+                    </button>
+                </div>
+            );
+        }
         return (
-            <div className="text-center py-12">
-                <p className="text-red-500">Không tìm thấy ID lớp học</p>
-                <button
-                    onClick={() => navigate('/classList')}
-                    className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-                >
-                    Quay lại danh sách lớp
-                </button>
+            <div className="max-w-7xl mx-auto p-6">
+                <h1 className="text-3xl font-bold mb-6 text-gray-800">Tất cả học sinh của bạn</h1>
+                <div className="space-y-8">
+                    {allClasses.map((cls) => (
+                        <div key={cls.id}>
+                            <h2 className="text-xl font-bold mb-2 text-blue-700">{cls.className}</h2>
+                            <div className="grid gap-4">
+                                {(studentsByClass[cls.id] || []).length === 0 ? (
+                                    <div className="text-gray-400 italic">Không có học sinh nào trong lớp này.</div>
+                                ) : (
+                                    studentsByClass[cls.id].map((student, index) => (
+                                        <div
+                                            key={student.id}
+                                            className={`bg-white rounded-lg shadow-md p-4 border-l-4 transition-all hover:shadow-lg ${student.status === 'active' ? 'border-green-500' : 'border-red-500'
+                                                }`}
+                                        >
+                                            <div className="flex items-center gap-4">
+                                                <span className="bg-gray-100 text-gray-700 text-sm font-medium px-3 py-1 rounded-full">
+                                                    #{index + 1}
+                                                </span>
+                                                <div>
+                                                    <h3 className="text-lg font-semibold text-gray-800">
+                                                        {student.studentName}
+                                                    </h3>
+                                                    <p className="text-sm text-gray-600 mb-1">{student.description || ''}</p>
+                                                    <p className="text-xs text-blue-600">{cls.className}</p>
+                                                    <p className="text-xs text-gray-500">
+                                                        Ngày tham gia: {formatDate(student.enrolledAt)}
+                                                    </p>
+                                                </div>
+                                                {/* Nút thao tác */}
+                                                <div className="flex gap-2 mt-3">
+                                                    <button
+                                                        onClick={() => toggleStudentStatus(student, cls.id)}
+                                                        className={`px-3 py-1 text-xs rounded-md font-medium border transition-colors ${student.status === 'active'
+                                                            ? 'bg-yellow-50 text-yellow-700 border-yellow-200 hover:bg-yellow-100'
+                                                            : 'bg-green-50 text-green-700 border-green-200 hover:bg-green-100'
+                                                            }`}
+                                                    >
+                                                        {student.status === 'active' ? 'Ngưng học' : 'Đang học'}
+                                                    </button>
+                                                    {/* <button
+                                                        onClick={() => removeStudent(student.id, student.studentName, cls.id)}
+                                                        className="px-3 py-1 text-xs rounded-md font-medium bg-red-100 text-red-800 hover:bg-red-200"
+                                                    >
+                                                        Xóa
+                                                    </button> */}
+                                                </div>
+                                            </div>
+
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+                        </div>
+                    ))}
+                </div>
             </div>
         );
     }
@@ -710,6 +822,13 @@ const StudentList: React.FC<StudentListProps> = ({ user }) => {
                                 onChange={(e) => setNewStudentEmail(e.target.value)}
                                 className="flex-1 px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                             />
+                            <input
+                                type="text"
+                                placeholder="Mô tả thêm (tuỳ chọn)"
+                                value={newStudentDescription}
+                                onChange={(e) => setNewStudentDescription(e.target.value)}
+                                className="flex-1 px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
                             <button
                                 onClick={addStudent}
                                 className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
@@ -720,6 +839,7 @@ const StudentList: React.FC<StudentListProps> = ({ user }) => {
                                 onClick={() => {
                                     setShowAddStudent(false);
                                     setNewStudentEmail('');
+                                    setNewStudentDescription('');
                                 }}
                                 className="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400"
                             >

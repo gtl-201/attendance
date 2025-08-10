@@ -187,6 +187,65 @@ const Attendance: React.FC<AttendanceProps> = ({ user }) => {
 
         await togglePaymentStatusForMonth(studentId, classId, targetMonth);
     };
+    const [showMessageModal, setShowMessageModal] = useState(false);
+    const [messageTemplate, setMessageTemplate] = useState(`Thông báo học phí môn tin tháng ##thang của con ##ten :\n Số buổi học nhóm ##sobuoi ( ##hocphi )\n Số buổi học bổ sung ##so-buoibs ( ##hoc-phibs )\n Tổng: ##tienhoc \n Thông tin chuyển khoản: \n........`);
+
+
+    const generateStudentMessage = (studentId: string, classId: string) => {
+        const student = students.find(s => s.id === studentId);
+        const classInfo = classes.find(c => c.id === classId);
+
+        if (!student || !classInfo) return '';
+
+        const studentRecords = filteredRecords.filter(r => r.studentId === studentId && r.classId === classId);
+        const regularSessions = studentRecords.filter(r => ['present', 'absent', 'late'].includes(r.status));
+        const makeupSessions = studentRecords.filter(r => r.status === 'makeup');
+
+        const hocphi = classInfo.feePerSession;
+        const sobuoi = regularSessions.length;
+        const sobuoibs = makeupSessions.length;
+
+        // Nếu không có buổi bổ sung thì học phí bổ sung là 0
+        let hocphibs = 0;
+        if (sobuoibs > 0) {
+            hocphibs = makeupSessions[0].fee || hocphi;
+        }
+
+        // Tổng tiền bổ sung = số buổi makeup * fee mỗi buổi makeup
+        const tongHocPhiBoSung = sobuoibs * hocphibs;
+
+        // Tổng tiền = học phí nhóm * số buổi nhóm + tổng tiền bổ sung
+        const tienhoc = hocphi * sobuoi + tongHocPhiBoSung;
+        const monthName = selectedMonth.toLocaleDateString('vi-VN', { month: 'long', year: 'numeric' });
+
+        // Nếu không có buổi bổ sung, ẩn dòng bổ sung khỏi message
+        let msg = messageTemplate
+            .replace(/##ten/g, student.studentName)
+            .replace(/##thang/g, monthName)
+            .replace(/##sobuoi/g, sobuoi.toString())
+            .replace(/##so-buoibs/g, sobuoibs.toString())
+            .replace(/##hocphi/g, hocphi.toLocaleString('vi-VN') + '₫')
+            .replace(/##hoc-phibs/g, hocphibs.toLocaleString('vi-VN') + '₫')
+            .replace(/##tienhoc/g, tienhoc.toLocaleString('vi-VN') + '₫');
+
+        // Ẩn dòng bổ sung nếu không có buổi bổ sung
+        if (sobuoibs === 0) {
+            msg = msg.replace(/.*Số buổi học bổ sung.*\n?/g, '');
+        }
+        // Ẩn dòng học nhóm nếu không có buổi nhóm
+        if (sobuoi === 0) {
+            msg = msg.replace(/.*Số buổi học nhóm.*\n?/g, '');
+        }
+        return msg;
+    };
+    const getPaymentStatusForStudent = (studentId: string, classId: string) => {
+        const months = getMonthsInRange(dateFrom, dateTo);
+        const paymentStatuses = months.map(month => {
+            const key = getPaymentKey(studentId, classId, month);
+            return paymentStatus[key] === 'paid';
+        });
+        return paymentStatuses.every(status => status); // Tất cả tháng đều đã thanh toán
+    };
     const [showFeeMessage, setShowFeeMessage] = React.useState(false);
     const feeMessage = (
         <div className="mt-6">
@@ -205,11 +264,9 @@ const Attendance: React.FC<AttendanceProps> = ({ user }) => {
                     </button>
                 </div>
                 <div className="text-sm sm:text-base text-blue-800">
-                    Quý phụ huynh vui lòng thanh toán học phí cho các buổi học đã tham gia trong tháng này. Nếu có thắc mắc về số buổi hoặc học phí, xin liên hệ giáo viên chủ nhiệm để được hỗ trợ.
+                    Đang cập nhật
                 </div>
-                <div className="mt-2 text-xs text-blue-500">
-                    (Tin nhắn này chỉ mang tính chất tham khảo, vui lòng kiểm tra lại số buổi thực tế trước khi thanh toán.)
-                </div>
+
             </div>
         </div>
     );
@@ -250,7 +307,6 @@ const Attendance: React.FC<AttendanceProps> = ({ user }) => {
         month: string;
     } | null>(null);
     const [showStudentModal, setShowStudentModal] = useState(false);
-
 
     useEffect(() => {
         fetchPaymentStatus();
@@ -654,7 +710,7 @@ const Attendance: React.FC<AttendanceProps> = ({ user }) => {
     };
 
     return (
-        <div className="max-w-7xl mx-auto p-6">
+        <div className="max-w-7xl mx-auto p-6 bg-[#F5F5F5]">
             {/* Toast Messages */}
             <div className="fixed top-20 right-4 z-1000 space-y-2 max-w-sm">
                 {toastMessages.map((message) => (
@@ -707,17 +763,17 @@ const Attendance: React.FC<AttendanceProps> = ({ user }) => {
                         )}
                     </div>
 
-                    {/* Navigation Button */}
+                    {/* Show message Button */}
                     <div className="flex justify-end sm:flex-shrink-0">
                         <button
-                            onClick={() => navigate('/classList')}
+                            onClick={() => setShowMessageModal(true)}
                             className="w-full sm:w-auto px-4 py-2.5 sm:py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 active:bg-blue-800 font-medium text-sm sm:text-base transition-colors touch-manipulation shadow-sm hover:shadow-md flex items-center justify-center gap-2"
                         >
-                            <svg className="w-4 h-4 sm:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            {/* <svg className="w-4 h-4 sm:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-                            </svg>
-                            <span className="sm:hidden">Về Danh Sách Lớp</span>
-                            <span className="hidden sm:inline">Quay lại danh sách lớp</span>
+                            </svg> */}
+                            <span className="sm:hidden">Hiển thị tin nhắn tháng</span>
+                            <span className="hidden sm:inline">Tin nhắn tháng</span>
                         </button>
                     </div>
                 </div>
@@ -1168,7 +1224,7 @@ const Attendance: React.FC<AttendanceProps> = ({ user }) => {
             ) : (
                 <>
                     {/* Month Navigation for List View */}
-                    <div className="flex items-center justify-between mb-4 p-4 bg-blue-50 rounded-lg">
+                    <div className="flex items-center justify-between mb-4 p-4 bg-blue-100 rounded-lg shadow-md">
                         <button
                             onClick={() => changeMonth('prev')}
                             className="px-3 py-2 bg-white text-gray-700 rounded-md hover:bg-gray-100 shadow-sm transition-colors flex items-center gap-2"
@@ -1211,7 +1267,7 @@ const Attendance: React.FC<AttendanceProps> = ({ user }) => {
 
                     {/* List View */}
                     {viewMode === 'list' && (
-                        <div className="bg-white rounded-lg shadow-md">
+                        <div className="rounded-lg bg-[#F5F5F5]">
                             {filteredRecords.length === 0 ? (
                                 <div className="p-4 sm:p-8 text-center text-gray-500">
                                     <div className="text-4xl sm:text-6xl mb-2 sm:mb-4">📋</div>
@@ -1283,7 +1339,7 @@ const Attendance: React.FC<AttendanceProps> = ({ user }) => {
                                             }, {} as Record<string, StudentStats>);
 
                                             return (
-                                                <div key={classId} className="mb-4 sm:mb-8">
+                                                <div key={classId} className="mb-4 sm:mb-8 shadow-md rounded-lg overflow-hidden">
                                                     {/* Class Header */}
                                                     <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-3 sm:px-6 py-3 sm:py-4 rounded-t-lg">
                                                         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
@@ -1507,7 +1563,6 @@ const Attendance: React.FC<AttendanceProps> = ({ user }) => {
                                                                         </div>
                                                                     </td>
                                                                     <td></td>
-                                                                    
                                                                 </tr>
                                                             </tfoot>
                                                         </table>
@@ -2435,6 +2490,171 @@ const Attendance: React.FC<AttendanceProps> = ({ user }) => {
                                 <button
                                     onClick={closeModal}
                                     className="px-6 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700"
+                                >
+                                    Đóng
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Message Template Modal */}
+            {showMessageModal && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+                        <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4">
+                            <div className="flex items-center justify-between">
+                                <h2 className="text-xl font-bold text-gray-800">Tạo mẫu tin nhắn thông báo học phí</h2>
+                                <button
+                                    onClick={() => setShowMessageModal(false)}
+                                    className="text-gray-400 hover:text-gray-600 text-2xl font-bold"
+                                >
+                                    ×
+                                </button>
+                            </div>
+                        </div>
+
+                        <div className="p-6 space-y-6">
+                            <div className="bg-gray-50 p-4 rounded-lg">
+                                <h3 className="text-lg font-semibold text-gray-800 mb-2">Tổng quan thanh toán</h3>
+                                {(() => {
+                                    const allStudentPayments = filteredStudents.flatMap(student => {
+                                        const studentClasses = filteredRecords
+                                            .filter(r => r.studentId === student.id)
+                                            .map(r => r.classId)
+                                            .filter((classId, index, arr) => arr.indexOf(classId) === index);
+
+                                        return studentClasses.map(classId => ({
+                                            studentId: student.id,
+                                            classId,
+                                            isPaid: getPaymentStatusForStudent(student.id, classId)
+                                        }));
+                                    });
+
+                                    const paidCount = allStudentPayments.filter(p => p.isPaid).length;
+                                    const unpaidCount = allStudentPayments.filter(p => !p.isPaid).length;
+                                    const total = allStudentPayments.length;
+
+                                    return (
+                                        <div className="grid grid-cols-3 gap-4 text-center">
+                                            <div className="bg-white p-3 rounded">
+                                                <div className="text-2xl font-bold text-gray-700">{total}</div>
+                                                <div className="text-sm text-gray-600">Tổng số</div>
+                                            </div>
+                                            <div className="bg-white p-3 rounded">
+                                                <div className="text-2xl font-bold text-red-600">{unpaidCount}</div>
+                                                <div className="text-sm text-gray-600">Chưa đóng</div>
+                                            </div>
+                                            <div className="bg-white p-3 rounded">
+                                                <div className="text-2xl font-bold text-green-600">{paidCount}</div>
+                                                <div className="text-sm text-gray-600">Đã đóng</div>
+                                            </div>
+                                        </div>
+                                    );
+                                })()}
+                            </div>
+
+                            {/* Template Editor */}
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    Mẫu tin nhắn (sử dụng các từ khóa: ##ten, ##tienhoc, ##sobuoi, ##thang, ##so-buoibs, ##tienhocbosung)
+                                </label>
+                                <textarea
+                                    value={messageTemplate}
+                                    onChange={(e) => setMessageTemplate(e.target.value)}
+                                    className="w-full h-40 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    placeholder="Nhập mẫu tin nhắn..."
+                                />
+                            </div>
+
+                            {/* Preview for each student */}
+                            {/* Preview for each student */}
+                            <div>
+                                <h3 className="text-lg font-semibold text-gray-800 mb-4">Xem trước tin nhắn cho từng học sinh</h3>
+                                <div className="space-y-4">
+                                    {(() => {
+                                        // Tạo danh sách học sinh với thông tin thanh toán
+                                        const studentMessages = filteredStudents.flatMap(student => {
+                                            const studentClasses = filteredRecords
+                                                .filter(r => r.studentId === student.id)
+                                                .map(r => r.classId)
+                                                .filter((classId, index, arr) => arr.indexOf(classId) === index);
+
+                                            return studentClasses.map(classId => {
+                                                const classInfo = classes.find(c => c.id === classId);
+                                                const previewMessage = generateStudentMessage(student.id, classId);
+                                                const isPaid = getPaymentStatusForStudent(student.id, classId);
+
+                                                return {
+                                                    studentId: student.id,
+                                                    classId,
+                                                    student,
+                                                    classInfo,
+                                                    previewMessage,
+                                                    isPaid
+                                                };
+                                            });
+                                        });
+
+                                        // Sắp xếp: chưa thanh toán trước, đã thanh toán sau
+                                        const sortedMessages = studentMessages.sort((a, b) => {
+                                            if (a.isPaid === b.isPaid) {
+                                                return a.student.studentName.localeCompare(b.student.studentName);
+                                            }
+                                            return a.isPaid ? 1 : -1; // chưa thanh toán (false) lên trước
+                                        });
+
+                                        return sortedMessages.map(({ studentId, classId, student, classInfo, previewMessage, isPaid }) => (
+                                            <div key={`${studentId}_${classId}`} className={`border rounded-lg p-4 ${isPaid ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50'
+                                                }`}>
+                                                <div className="flex justify-between items-center mb-2">
+                                                    <div className="flex items-center gap-2">
+                                                        <h4 className="font-medium text-gray-800">
+                                                            {student.studentName} - {classInfo?.className}
+                                                        </h4>
+                                                        <span className={`px-2 py-1 rounded-full text-xs font-bold ${isPaid
+                                                            ? 'bg-green-100 text-green-700 border border-green-400'
+                                                            : 'bg-red-100 text-red-700 border border-red-400'
+                                                            }`}>
+                                                            {isPaid ? '✅ĐĐ' : '❌CĐ'}
+                                                        </span>
+                                                    </div>
+                                                    <button
+                                                        onClick={() => navigator.clipboard.writeText(previewMessage)}
+                                                        className="px-3 py-1 bg-blue-100 text-blue-600 rounded text-sm hover:bg-blue-200"
+                                                    >
+                                                        📋 Copy
+                                                    </button>
+                                                    {/* <button
+                                                        onClick={() => {
+                                                            // Gửi qua Zalo bằng deeplink (chỉ mở app, không gửi tự động)
+                                                            // Thay số điện thoại bằng số phụ huynh nếu có
+                                                            const phone = "0904166534"; 
+                                                            const text = encodeURIComponent(previewMessage);
+                                                            window.open(`https://zalo.me/${phone}?text=${text}`, '_blank');
+                                                        }}
+                                                        className="px-3 py-1 bg-green-100 text-green-600 rounded text-sm hover:bg-green-200"
+                                                        title="Gửi tin nhắn qua Zalo"
+                                                    >
+                                                        🟦 Zalo
+                                                    </button> */}
+                                                </div>
+                                                <div className="bg-gray-50 p-3 rounded text-sm whitespace-pre-line">
+                                                    {previewMessage}
+                                                </div>
+                                            </div>
+                                        ));
+                                    })()}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="sticky bottom-0 bg-gray-50 px-6 py-4 border-t border-gray-200">
+                            <div className="flex justify-end">
+                                <button
+                                    onClick={() => setShowMessageModal(false)}
+                                    className="px-6 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
                                 >
                                     Đóng
                                 </button>

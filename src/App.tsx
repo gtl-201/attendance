@@ -160,7 +160,7 @@ export default function App(): JSX.Element {
   }
 
   return (
-    <div className='min-h-full h-screen flex flex-col justify-between bg-[#F5F5F5]'>
+    <div className='min-h-full flex flex-col justify-between bg-[#F5F5F5]'>
       <div>
         <Router>
           {/* Navigation - only show when user is logged in */}

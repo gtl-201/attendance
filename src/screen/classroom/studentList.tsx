@@ -540,11 +540,11 @@ const StudentList: React.FC<StudentListProps> = ({ user }) => {
                                                     <button
                                                         onClick={() => toggleStudentStatus(student, cls.id)}
                                                         className={`px-3 py-1 text-xs rounded-md font-medium border transition-colors ${student.status === 'active'
-                                                            ? 'bg-yellow-50 text-yellow-700 border-yellow-200 hover:bg-yellow-100'
-                                                            : 'bg-green-50 text-green-700 border-green-200 hover:bg-green-100'
+                                                            ? 'bg-green-50 text-green-700 border-green-200 hover:bg-green-100'
+                                                            : 'bg-yellow-50 text-yellow-700 border-yellow-200 hover:bg-yellow-100'
                                                             }`}
                                                     >
-                                                        {student.status === 'active' ? 'Ngưng học' : 'Đang học'}
+                                                        {student.status === 'active' ? 'Đang học' : 'Ngưng học'}
                                                     </button>
                                                     {/* <button
                                                         onClick={() => removeStudent(student.id, student.studentName, cls.id)}
@@ -997,11 +997,11 @@ const StudentList: React.FC<StudentListProps> = ({ user }) => {
                                         <button
                                             onClick={() => toggleStudentStatus(student)}
                                             className={`w-full mt-2 px-4 py-2 text-sm rounded-lg font-medium border transition-colors ${student.status === 'active'
-                                                ? 'bg-yellow-50 text-yellow-700 border-yellow-200 hover:bg-yellow-100'
-                                                : 'bg-green-50 text-green-700 border-green-200 hover:bg-green-100'
+                                                ? 'bg-green-50 text-green-700 border-green-200 hover:bg-green-100'
+                                                : 'bg-yellow-50 text-yellow-700 border-yellow-200 hover:bg-yellow-100'
                                                 }`}
                                         >
-                                            {student.status === 'active' ? 'Chuyển sang Ngưng học' : 'Chuyển sang Đang học'}
+                                            {student.status === 'active' ? 'Đang học' : 'Ngưng học'}
                                         </button>
                                         <button
                                             onClick={() => removeStudent(student.id, student.studentName)}
@@ -1117,11 +1117,11 @@ const StudentList: React.FC<StudentListProps> = ({ user }) => {
                                             <button
                                                 onClick={() => toggleStudentStatus(student)}
                                                 className={`px-3 py-1 text-xs rounded-md font-medium border transition-colors ${student.status === 'active'
-                                                    ? 'bg-yellow-50 text-yellow-700 border-yellow-200 hover:bg-yellow-100'
-                                                    : 'bg-green-50 text-green-700 border-green-200 hover:bg-green-100'
+                                                    ? 'bg-green-50 text-green-700 border-green-200 hover:bg-green-100'
+                                                    : 'bg-yellow-50 text-yellow-700 border-yellow-200 hover:bg-yellow-100'
                                                     }`}
                                             >
-                                                {student.status === 'active' ? 'Ngưng học' : 'Đang học'}
+                                                {student.status === 'active' ? 'Đang học' : 'Ngưng học'}
                                             </button>
                                             <button
                                                 onClick={() => removeStudent(student.id, student.studentName)}

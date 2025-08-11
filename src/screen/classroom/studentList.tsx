@@ -22,7 +22,7 @@ interface StudentData {
     classId: string;
     enrolledAt: any;
     status: 'active' | 'inactive';
-    description?: string; // Thêm dòng này
+    phoneNumber?: string;
 }
 
 // Interface cho dữ liệu lớp học
@@ -69,13 +69,16 @@ const StudentList: React.FC<StudentListProps> = ({ user }) => {
     const [classInfo, setClassInfo] = useState<ClassData | null>(null);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
+    const [editingStudent, setEditingStudent] = useState<string | null>(null);
+    const [editStudentName, setEditStudentName] = useState('');
+    const [editStudentPhone, setEditStudentPhone] = useState('');
 
     // New toast message system
     const [toastMessages, setToastMessages] = useState<ToastMessage[]>([]);
 
     const [showAddStudent, setShowAddStudent] = useState(false);
     const [newStudentEmail, setNewStudentEmail] = useState('');
-    const [newStudentDescription, setNewStudentDescription] = useState(''); // Thêm state cho mô tả
+    const [newStudentPhoneNumber, setNewStudentPhoneNumber] = useState('');
 
     // States cho điểm danh - Đã cập nhật type để bao gồm 'excused'
     const [showAttendance, setShowAttendance] = useState(false);
@@ -243,7 +246,8 @@ const StudentList: React.FC<StudentListProps> = ({ user }) => {
     // Lọc học sinh theo từ khóa
     const filteredStudents = students.filter(student =>
         student.studentName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        student.studentEmail.toLowerCase().includes(searchTerm.toLowerCase())
+        student.studentEmail.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (student.phoneNumber && student.phoneNumber.includes(searchTerm))
     );
 
     // Thêm học sinh vào lớp
@@ -258,7 +262,6 @@ const StudentList: React.FC<StudentListProps> = ({ user }) => {
                 return;
             }
 
-            // Thêm enrollment mới
             const enrollmentData = {
                 studentId: 'pending',
                 studentName: newStudentEmail.split('@')[0],
@@ -266,7 +269,7 @@ const StudentList: React.FC<StudentListProps> = ({ user }) => {
                 classId: classId,
                 enrolledAt: new Date(),
                 status: 'active',
-                description: newStudentDescription.trim() // Thêm mô tả
+                phoneNumber: newStudentPhoneNumber.trim() // Thay description thành phoneNumber
             };
 
             await addDoc(collection(db, 'enrollments'), enrollmentData);
@@ -282,12 +285,56 @@ const StudentList: React.FC<StudentListProps> = ({ user }) => {
 
             addMessage('success', 'Thêm học sinh thành công');
             setNewStudentEmail('');
-            setNewStudentDescription(''); // Reset mô tả
             setShowAddStudent(false);
             fetchStudents();
+            setNewStudentPhoneNumber('');
         } catch (error) {
             console.error('Lỗi khi thêm học sinh:', error);
             addMessage('error', 'Không thể thêm học sinh');
+        }
+    };
+
+    // Function để bắt đầu chỉnh sửa thông tin học sinh
+    const startEditStudent = (student: StudentData) => {
+        setEditingStudent(student.id);
+        setEditStudentName(student.studentName);
+        setEditStudentPhone(student.phoneNumber || '');
+    };
+
+    // Function để hủy chỉnh sửa
+    const cancelEditStudent = () => {
+        setEditingStudent(null);
+        setEditStudentName('');
+        setEditStudentPhone('');
+    };
+
+    // Function để lưu thông tin chỉnh sửa
+    const saveEditStudent = async (studentId: string) => {
+        if (!editStudentName.trim()) {
+            addMessage('error', 'Tên học sinh không được để trống');
+            return;
+        }
+
+        try {
+            await updateDoc(doc(db, 'enrollments', studentId), {
+                studentName: editStudentName.trim(),
+                phoneNumber: editStudentPhone.trim(),
+                updatedAt: new Date()
+            });
+
+            addMessage('success', 'Cập nhật thông tin học sinh thành công');
+            setEditingStudent(null);
+            setEditStudentName('');
+            setEditStudentPhone('');
+
+            if (classId) {
+                fetchStudents();
+            } else {
+                fetchAllClassesAndStudents();
+            }
+        } catch (error) {
+            console.error('Lỗi khi cập nhật thông tin học sinh:', error);
+            addMessage('error', 'Không thể cập nhật thông tin học sinh');
         }
     };
 
@@ -522,21 +569,60 @@ const StudentList: React.FC<StudentListProps> = ({ user }) => {
                                                 }`}
                                         >
                                             <div className="flex items-center gap-4">
-                                                <span className="bg-gray-100 text-gray-700 text-sm font-medium px-3 py-1 rounded-full">
-                                                    #{index + 1}
-                                                </span>
-                                                <div>
-                                                    <h3 className="text-lg font-semibold text-gray-800">
-                                                        {student.studentName}
-                                                    </h3>
-                                                    <p className="text-sm text-gray-600 mb-1">{student.description || ''}</p>
-                                                    <p className="text-xs text-blue-600">{cls.className}</p>
-                                                    <p className="text-xs text-gray-500">
-                                                        Ngày tham gia: {formatDate(student.enrolledAt)}
-                                                    </p>
-                                                </div>
+                                                {/* Form chỉnh sửa hoặc hiển thị thông tin */}
+                                                {editingStudent === student.id ? (
+                                                    <div className="space-y-2">
+                                                        <input
+                                                            type="text"
+                                                            value={editStudentName}
+                                                            onChange={(e) => setEditStudentName(e.target.value)}
+                                                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                            placeholder="Tên học sinh"
+                                                        />
+                                                        <input
+                                                            type="text"
+                                                            value={editStudentPhone}
+                                                            onChange={(e) => setEditStudentPhone(e.target.value)}
+                                                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                            placeholder="Số điện thoại"
+                                                        />
+                                                        <div className="flex gap-2">
+                                                            <button
+                                                                onClick={() => saveEditStudent(student.id)}
+                                                                className="px-3 py-1 bg-green-600 text-white rounded-md hover:bg-green-700 text-sm"
+                                                            >
+                                                                Lưu
+                                                            </button>
+                                                            <button
+                                                                onClick={cancelEditStudent}
+                                                                className="px-3 py-1 bg-gray-400 text-white rounded-md hover:bg-gray-500 text-sm"
+                                                            >
+                                                                Hủy
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                ) : (
+                                                    <div>
+                                                        <h3 className="text-lg font-semibold text-gray-800">
+                                                            {student.studentName}
+                                                        </h3>
+                                                        <p className="text-sm text-gray-600 mb-1">
+                                                            SĐT: {student.phoneNumber || 'Chưa có'}
+                                                        </p>
+                                                        <p className="text-xs text-blue-600">{classInfo?.className || ''}</p>
+                                                        <p className="text-xs text-gray-500">
+                                                            Ngày tham gia: {formatDate(student.enrolledAt)}
+                                                        </p>
+                                                    </div>
+                                                )}
                                                 {/* Nút thao tác */}
                                                 <div className="flex gap-2 mt-3">
+                                                    <button
+                                                        onClick={() => startEditStudent(student)}
+                                                        className="w-full border-blue-200 border px-2 py-2 text-xs rounded-md font-medium bg-blue-100 text-blue-800 hover:bg-blue-200"
+                                                    >
+                                                        Sửa
+                                                    </button>
                                                     <button
                                                         onClick={() => toggleStudentStatus(student, cls.id)}
                                                         className={`px-3 py-1 text-xs rounded-md font-medium border transition-colors ${student.status === 'active'
@@ -824,9 +910,9 @@ const StudentList: React.FC<StudentListProps> = ({ user }) => {
                             />
                             <input
                                 type="text"
-                                placeholder="Mô tả thêm (tuỳ chọn)"
-                                value={newStudentDescription}
-                                onChange={(e) => setNewStudentDescription(e.target.value)}
+                                placeholder="Số điện thoại (tuỳ chọn)"
+                                value={newStudentPhoneNumber}
+                                onChange={(e) => setNewStudentPhoneNumber(e.target.value)}
                                 className="flex-1 px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                             />
                             <button
@@ -839,7 +925,7 @@ const StudentList: React.FC<StudentListProps> = ({ user }) => {
                                 onClick={() => {
                                     setShowAddStudent(false);
                                     setNewStudentEmail('');
-                                    setNewStudentDescription('');
+                                    setNewStudentPhoneNumber('');
                                 }}
                                 className="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400"
                             >
@@ -870,19 +956,52 @@ const StudentList: React.FC<StudentListProps> = ({ user }) => {
                                 {/* Student Info Section - Top */}
                                 <div className="mb-4">
                                     <div className="flex items-start gap-3 mb-3">
-                                        <span className="bg-gray-100 text-gray-700 text-sm font-medium px-2 py-1 rounded-full min-w-[2rem] text-center">
-                                            #{index + 1}
-                                        </span>
-                                        <div className="flex-1">
-                                            <h3 className="text-lg font-semibold text-gray-800 mb-1">
-                                                {student.studentName}
-                                            </h3>
-                                            <p className="text-sm text-gray-600">{student.description || ''}</p>
-                                            <p className="text-xs text-blue-600">{classInfo?.className || ''}</p>
-                                            <p className="text-xs text-gray-500">
-                                                Ngày tham gia: {formatDate(student.enrolledAt)}
-                                            </p>
-                                        </div>
+                                        {/* Form chỉnh sửa hoặc hiển thị thông tin */}
+                                        {editingStudent === student.id ? (
+                                            <div className="space-y-2">
+                                                <input
+                                                    type="text"
+                                                    value={editStudentName}
+                                                    onChange={(e) => setEditStudentName(e.target.value)}
+                                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                    placeholder="Tên học sinh"
+                                                />
+                                                <input
+                                                    type="text"
+                                                    value={editStudentPhone}
+                                                    onChange={(e) => setEditStudentPhone(e.target.value)}
+                                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                    placeholder="Số điện thoại"
+                                                />
+                                                <div className="flex gap-2">
+                                                    <button
+                                                        onClick={() => saveEditStudent(student.id)}
+                                                        className="px-3 py-1 bg-green-600 text-white rounded-md hover:bg-green-700 text-sm"
+                                                    >
+                                                        Lưu
+                                                    </button>
+                                                    <button
+                                                        onClick={cancelEditStudent}
+                                                        className="px-3 py-1 bg-gray-400 text-white rounded-md hover:bg-gray-500 text-sm"
+                                                    >
+                                                        Hủy
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div>
+                                                <h3 className="text-lg font-semibold text-gray-800">
+                                                    {student.studentName}
+                                                </h3>
+                                                <p className="text-sm text-gray-600 mb-1">
+                                                    SĐT: {student.phoneNumber || 'Chưa có'}
+                                                </p>
+                                                <p className="text-xs text-blue-600">{classInfo?.className || ''}</p>
+                                                <p className="text-xs text-gray-500">
+                                                    Ngày tham gia: {formatDate(student.enrolledAt)}
+                                                </p>
+                                            </div>
+                                        )}
                                         {/* Status Badge */}
                                         {showAttendance && attendanceData[student.id] && (
                                             <div className="ml-2">
@@ -993,7 +1112,19 @@ const StudentList: React.FC<StudentListProps> = ({ user }) => {
 
                                 {/* Remove button for non-attendance mode */}
                                 {!showAttendance && classInfo && user && user.uid === classInfo.teacherId && (
-                                    <div className="mt-3 pt-3 border-t border-gray-200">
+                                    <div className="mt-3 pt-3 border-t border-gray-200 text-end">
+                                        <button
+                                            onClick={() => removeStudent(student.id, student.studentName)}
+                                            className="px-4 py-2 mt-2 mb-2 text-sm rounded-lg font-medium bg-red-50 text-red-700 hover:bg-red-100 border border-red-200 transition-colors"
+                                        >
+                                            🗑️ Xóa học sinh
+                                        </button>
+                                        <button
+                                            onClick={() => startEditStudent(student)}
+                                            className="w-full border-blue-200 border px-2 py-2 text-xs rounded-md font-medium bg-blue-100 text-blue-800 hover:bg-blue-200"
+                                        >
+                                            Sửa
+                                        </button>
                                         <button
                                             onClick={() => toggleStudentStatus(student)}
                                             className={`w-full mt-2 px-4 py-2 text-sm rounded-lg font-medium border transition-colors ${student.status === 'active'
@@ -1003,12 +1134,7 @@ const StudentList: React.FC<StudentListProps> = ({ user }) => {
                                         >
                                             {student.status === 'active' ? 'Đang học' : 'Ngưng học'}
                                         </button>
-                                        <button
-                                            onClick={() => removeStudent(student.id, student.studentName)}
-                                            className="w-full px-4 py-2 mt-2 text-sm rounded-lg font-medium bg-red-50 text-red-700 hover:bg-red-100 border border-red-200 transition-colors"
-                                        >
-                                            🗑️ Xóa học sinh
-                                        </button>
+
 
                                     </div>
                                 )}
@@ -1018,19 +1144,52 @@ const StudentList: React.FC<StudentListProps> = ({ user }) => {
                             <div className="hidden lg:flex justify-between items-center">
                                 <div className="flex-1">
                                     <div className="flex items-center gap-4">
-                                        <span className="bg-gray-100 text-gray-700 text-sm font-medium px-3 py-1 rounded-full">
-                                            #{index + 1}
-                                        </span>
-                                        <div className="flex-1">
-                                            <h3 className="text-lg font-semibold text-gray-800">
-                                                {student.studentName}
-                                            </h3>
-                                            <p className="text-sm text-gray-600 mb-1">{student.description || ''}</p>
-                                            <p className="text-xs text-blue-600">{classInfo?.className || ''}</p>
-                                            <p className="text-xs text-gray-500">
-                                                Ngày tham gia: {formatDate(student.enrolledAt)}
-                                            </p>
-                                        </div>
+                                        {/* Form chỉnh sửa hoặc hiển thị thông tin */}
+                                        {editingStudent === student.id ? (
+                                            <div className="space-y-2">
+                                                <input
+                                                    type="text"
+                                                    value={editStudentName}
+                                                    onChange={(e) => setEditStudentName(e.target.value)}
+                                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                    placeholder="Tên học sinh"
+                                                />
+                                                <input
+                                                    type="text"
+                                                    value={editStudentPhone}
+                                                    onChange={(e) => setEditStudentPhone(e.target.value)}
+                                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                    placeholder="Số điện thoại"
+                                                />
+                                                <div className="flex gap-2">
+                                                    <button
+                                                        onClick={() => saveEditStudent(student.id)}
+                                                        className="px-3 py-1 bg-green-600 text-white rounded-md hover:bg-green-700 text-sm"
+                                                    >
+                                                        Lưu
+                                                    </button>
+                                                    <button
+                                                        onClick={cancelEditStudent}
+                                                        className="px-3 py-1 bg-gray-400 text-white rounded-md hover:bg-gray-500 text-sm"
+                                                    >
+                                                        Hủy
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div>
+                                                <h3 className="text-lg font-semibold text-gray-800">
+                                                    {student.studentName}
+                                                </h3>
+                                                <p className="text-sm text-gray-600 mb-1">
+                                                    SĐT: {student.phoneNumber || 'Chưa có'}
+                                                </p>
+                                                <p className="text-xs text-blue-600">{classInfo?.className || ''}</p>
+                                                <p className="text-xs text-gray-500">
+                                                    Ngày tham gia: {formatDate(student.enrolledAt)}
+                                                </p>
+                                            </div>
+                                        )}
 
                                         {/* Desktop Attendance controls */}
                                         {showAttendance && classInfo && user && user.uid === classInfo.teacherId && (
@@ -1114,6 +1273,12 @@ const StudentList: React.FC<StudentListProps> = ({ user }) => {
                                 {!showAttendance && classInfo && user && user.uid === classInfo.teacherId && (
                                     <div className="flex items-center gap-3">
                                         <div className="flex gap-2">
+                                            <button
+                                                onClick={() => startEditStudent(student)}
+                                                className="w-full border-blue-200 border px-2 py-2 text-xs rounded-md font-medium bg-blue-100 text-blue-800 hover:bg-blue-200"
+                                            >
+                                                Sửa
+                                            </button>
                                             <button
                                                 onClick={() => toggleStudentStatus(student)}
                                                 className={`px-3 py-1 text-xs rounded-md font-medium border transition-colors ${student.status === 'active'

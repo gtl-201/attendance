@@ -34,6 +34,7 @@ interface StudentData {
     studentEmail: string;
     classId: string;
     enrolledAt: any;
+    phoneNumber?: any;
     status: 'active' | 'inactive';
 }
 interface StudentStats {
@@ -68,9 +69,51 @@ interface AttendanceProps {
     user: any;
 }
 
+
+
 const Attendance: React.FC<AttendanceProps> = ({ user }) => {
     const navigate = useNavigate();
     const [paymentStatus, setPaymentStatus] = useState<PaymentStatus>({});
+    const [messageTemplate, setMessageTemplate] = useState<string>(`Thông báo học phí môn tin ##thang của con ##ten :\n Số buổi học nhóm ##sobuoi ( ##hocphi )\n Số buổi học bổ sung ##so-buoibs ( ##hoc-phibs )\n Tổng: ##tienhoc \n Thông tin chuyển khoản: \n........`);
+    const [savingTemplate, setSavingTemplate] = useState(false);
+
+    const [savedTemplate, setSavedTemplate] = useState<string>(''); // Thêm state này
+
+    useEffect(() => {
+        const fetchUserTemplate = async () => {
+            if (!user?.uid) return;
+            try {
+                const userRef = doc(db, 'users', user.uid);
+                const userSnap = await getDoc(userRef);
+                if (userSnap.exists()) {
+                    const data = userSnap.data();
+                    if (data.messageTemplate && typeof data.messageTemplate === 'string') {
+                        setMessageTemplate(data.messageTemplate);
+                        setSavedTemplate(data.messageTemplate); // Lưu mẫu đã lưu
+                    }
+                }
+            } catch (error) {
+                console.error('Không thể lấy messageTemplate từ user:', error);
+            }
+        };
+        fetchUserTemplate();
+    }, [user?.uid]);
+
+    const handleSaveTemplate = async () => {
+        if (!user?.uid) return;
+        setSavingTemplate(true);
+        try {
+            const userRef = doc(db, 'users', user.uid);
+            await updateDoc(userRef, { messageTemplate });
+            setSavedTemplate(messageTemplate); // Cập nhật mẫu đã lưu
+            addMessage('success', 'Đã lưu mẫu tin nhắn thành công!');
+        } catch (error) {
+            addMessage('error', 'Lỗi khi lưu mẫu tin nhắn');
+        }
+        setSavingTemplate(false);
+    };
+
+
     // Helper: Lấy key cho trạng thái đóng tiền
     const getPaymentKey = (studentId: string, classId: string, month: string) =>
         `${studentId}_${classId}_${month}`;
@@ -86,6 +129,7 @@ const Attendance: React.FC<AttendanceProps> = ({ user }) => {
 
         const months = getMonthsInRange(dateFrom, dateTo);
         if (months.length === 0) return;
+
 
         try {
             const status: PaymentStatus = {};
@@ -188,7 +232,7 @@ const Attendance: React.FC<AttendanceProps> = ({ user }) => {
         await togglePaymentStatusForMonth(studentId, classId, targetMonth);
     };
     const [showMessageModal, setShowMessageModal] = useState(false);
-    const [messageTemplate, setMessageTemplate] = useState(`Thông báo học phí môn tin tháng ##thang của con ##ten :\n Số buổi học nhóm ##sobuoi ( ##hocphi )\n Số buổi học bổ sung ##so-buoibs ( ##hoc-phibs )\n Tổng: ##tienhoc \n Thông tin chuyển khoản: \n........`);
+    // const [messageTemplate, setMessageTemplate] = useState(`Thông báo học phí môn tin tháng ##thang của con ##ten :\n Số buổi học nhóm ##sobuoi ( ##hocphi )\n Số buổi học bổ sung ##so-buoibs ( ##hoc-phibs )\n Tổng: ##tienhoc \n Thông tin chuyển khoản: \n........`);
 
 
     const generateStudentMessage = (studentId: string, classId: string) => {
@@ -216,12 +260,12 @@ const Attendance: React.FC<AttendanceProps> = ({ user }) => {
 
         // Tổng tiền = học phí nhóm * số buổi nhóm + tổng tiền bổ sung
         const tienhoc = hocphi * sobuoi + tongHocPhiBoSung;
-        const monthName = selectedMonth.toLocaleDateString('vi-VN', { month: 'long', year: 'numeric' });
+        const monthName = selectedMonth.toLocaleDateString('vi-VN', { month: 'long' });
 
         // Nếu không có buổi bổ sung, ẩn dòng bổ sung khỏi message
         let msg = messageTemplate
             .replace(/##ten/g, student.studentName)
-            .replace(/##thang/g, monthName)
+            .replace(/##thang/g, monthName.toLowerCase())
             .replace(/##sobuoi/g, sobuoi.toString())
             .replace(/##so-buoibs/g, sobuoibs.toString())
             .replace(/##hocphi/g, hocphi.toLocaleString('vi-VN') + '₫')
@@ -2558,7 +2602,7 @@ const Attendance: React.FC<AttendanceProps> = ({ user }) => {
                             {/* Template Editor */}
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                                    Mẫu tin nhắn (sử dụng các từ khóa: ##ten, ##tienhoc, ##sobuoi, ##thang, ##so-buoibs, ##tienhocbosung)
+                                    Mẫu tin nhắn (sử dụng các từ khóa: ##ten, ##thang,##sobuoi, ##hocphi, ##so-buoibs, ##hoc-phibs, ##tienhoc)
                                 </label>
                                 <textarea
                                     value={messageTemplate}
@@ -2566,6 +2610,23 @@ const Attendance: React.FC<AttendanceProps> = ({ user }) => {
                                     className="w-full h-40 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                                     placeholder="Nhập mẫu tin nhắn..."
                                 />
+                                <button
+                                    onClick={handleSaveTemplate}
+                                    disabled={savingTemplate || messageTemplate === savedTemplate}
+                                    className={`mt-3 px-4 py-2 rounded bg-blue-600 text-white font-medium transition-colors ${savingTemplate || messageTemplate === savedTemplate ? 'opacity-60 cursor-not-allowed' : 'hover:bg-blue-700'}`}
+                                >
+                                    {messageTemplate === savedTemplate
+                                        ? 'Mẫu tin nhắn đã được lưu'
+                                        : savingTemplate
+                                            ? 'Đang lưu...'
+                                            : 'Lưu mẫu tin nhắn'}
+                                </button>
+                                {/* {savedTemplate && (
+                                    <div className="mt-2 text-xs text-gray-500">
+                                        <span className="font-semibold text-blue-600">Mẫu đã lưu:</span>
+                                        <pre className="bg-gray-100 rounded p-2 mt-1 whitespace-pre-line">{savedTemplate}</pre>
+                                    </div>
+                                )} */}
                             </div>
 
                             {/* Preview for each student */}
@@ -2606,42 +2667,165 @@ const Attendance: React.FC<AttendanceProps> = ({ user }) => {
                                         });
 
                                         return sortedMessages.map(({ studentId, classId, student, classInfo, previewMessage, isPaid }) => (
-                                            <div key={`${studentId}_${classId}`} className={`border rounded-lg p-4 ${isPaid ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50'
+                                            <div key={`${studentId}_${classId}`} className={`border rounded-lg p-3 sm:p-4 ${isPaid ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50'
                                                 }`}>
-                                                <div className="flex justify-between items-center mb-2">
-                                                    <div className="flex items-center gap-2">
-                                                        <h4 className="font-medium text-gray-800">
-                                                            {student.studentName} - {classInfo?.className}
-                                                        </h4>
-                                                        <span className={`px-2 py-1 rounded-full text-xs font-bold ${isPaid
-                                                            ? 'bg-green-100 text-green-700 border border-green-400'
-                                                            : 'bg-red-100 text-red-700 border border-red-400'
-                                                            }`}>
-                                                            {isPaid ? '✅ĐĐ' : '❌CĐ'}
-                                                        </span>
+                                                {/* Mobile Layout */}
+                                                <div className="block sm:hidden">
+                                                    {/* Header Section */}
+                                                    <div className="mb-3">
+                                                        <div className="flex items-start justify-between gap-2 mb-2">
+                                                            <div className="flex-1 min-w-0">
+                                                                <h4 className="font-medium text-gray-800 text-sm leading-tight">
+                                                                    {student.studentName}
+                                                                </h4>
+                                                                <p className="text-xs text-gray-600 mt-1 truncate">
+                                                                    {classInfo?.className}
+                                                                </p>
+                                                            </div>
+                                                            <span className={`px-2 py-1 rounded-full text-xs font-bold whitespace-nowrap ${isPaid
+                                                                ? 'bg-green-100 text-green-700 border border-green-400'
+                                                                : 'bg-red-100 text-red-700 border border-red-400'
+                                                                }`}>
+                                                                {isPaid ? '✅ĐĐ' : '❌CĐ'}
+                                                            </span>
+                                                        </div>
+
+                                                        {/* Phone Number Section */}
+                                                        <div className="mb-3">
+                                                            {student.phoneNumber ? (
+                                                                <button
+                                                                    onClick={() => {
+                                                                        // Mở Zalo chat với số điện thoại
+                                                                        const phone = student.phoneNumber.replace(/[^0-9]/g, ''); // Xóa ký tự đặc biệt
+                                                                        window.open(`https://zalo.me/${phone}`, '_blank');
+                                                                    }}
+                                                                    className="w-full px-3 py-2 bg-blue-100 text-blue-600 rounded text-sm hover:bg-blue-200 transition-colors"
+                                                                >
+                                                                    🟦 {student.phoneNumber} (Zalo)
+                                                                </button>
+                                                            ) : (
+                                                                <div className="w-full px-3 py-2 bg-gray-100 text-gray-500 rounded text-sm text-center">
+                                                                    Chưa có số điện thoại
+                                                                </div>
+                                                            )}
+                                                        </div>
                                                     </div>
+
+                                                    {/* Message Preview */}
+                                                    <div className="bg-gray-50 p-3 rounded text-xs leading-relaxed whitespace-pre-line mb-3">
+                                                        {previewMessage}
+                                                    </div>
+
+                                                    {/* Action Button */}
                                                     <button
                                                         onClick={() => navigator.clipboard.writeText(previewMessage)}
-                                                        className="px-3 py-1 bg-blue-100 text-blue-600 rounded text-sm hover:bg-blue-200"
+                                                        className="w-full px-4 py-2 bg-blue-600 text-white rounded text-sm hover:bg-blue-700 transition-colors"
                                                     >
-                                                        📋 Copy
+                                                        📋 Sao chép tin nhắn
                                                     </button>
-                                                    {/* <button
-                                                        onClick={() => {
-                                                            // Gửi qua Zalo bằng deeplink (chỉ mở app, không gửi tự động)
-                                                            // Thay số điện thoại bằng số phụ huynh nếu có
-                                                            const phone = "0904166534"; 
-                                                            const text = encodeURIComponent(previewMessage);
-                                                            window.open(`https://zalo.me/${phone}?text=${text}`, '_blank');
-                                                        }}
-                                                        className="px-3 py-1 bg-green-100 text-green-600 rounded text-sm hover:bg-green-200"
-                                                        title="Gửi tin nhắn qua Zalo"
-                                                    >
-                                                        🟦 Zalo
-                                                    </button> */}
                                                 </div>
-                                                <div className="bg-gray-50 p-3 rounded text-sm whitespace-pre-line">
-                                                    {previewMessage}
+
+                                                {/* Tablet Layout */}
+                                                <div className="hidden sm:block lg:hidden">
+                                                    {/* Header */}
+                                                    <div className="flex items-center justify-between mb-3">
+                                                        <div className="flex items-center gap-3">
+                                                            <div>
+                                                                <h4 className="font-medium text-gray-800 text-base">
+                                                                    {student.studentName}
+                                                                </h4>
+                                                                <p className="text-sm text-gray-600">
+                                                                    {classInfo?.className}
+                                                                </p>
+                                                            </div>
+                                                            <span className={`px-3 py-1 rounded-full text-sm font-bold ${isPaid
+                                                                ? 'bg-green-100 text-green-700 border border-green-400'
+                                                                : 'bg-red-100 text-red-700 border border-red-400'
+                                                                }`}>
+                                                                {isPaid ? '✅ Đã đóng' : '❌ Chưa đóng'}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Phone and Actions */}
+                                                    <div className="flex gap-2 mb-3">
+                                                        {student.phoneNumber ? (
+                                                            <button
+                                                                onClick={() => {
+                                                                    // Mở Zalo chat với số điện thoại
+                                                                    const phone = student.phoneNumber.replace(/[^0-9]/g, ''); // Xóa ký tự đặc biệt
+                                                                    window.open(`https://zalo.me/${phone}`, '_blank');
+                                                                }}
+                                                                className="flex-1 px-3 py-2 bg-blue-100 text-blue-600 rounded text-sm hover:bg-blue-200 transition-colors"
+                                                            >
+                                                                🟦 {student.phoneNumber} (Zalo)
+                                                            </button>
+                                                        ) : (
+                                                            <div className="flex-1 px-3 py-2 bg-gray-100 text-gray-500 rounded text-sm text-center">
+                                                                Chưa có số điện thoại
+                                                            </div>
+                                                        )}
+                                                        <button
+                                                            onClick={() => navigator.clipboard.writeText(previewMessage)}
+                                                            className="px-4 py-2 bg-blue-600 text-white rounded text-sm hover:bg-blue-700 transition-colors whitespace-nowrap"
+                                                        >
+                                                            📋 Sao chép
+                                                        </button>
+                                                    </div>
+
+                                                    {/* Message Preview */}
+                                                    <div className="bg-gray-50 p-3 rounded text-sm whitespace-pre-line">
+                                                        {previewMessage}
+                                                    </div>
+                                                </div>
+
+                                                {/* Desktop Layout */}
+                                                <div className="hidden lg:block">
+                                                    <div className="flex justify-between items-start gap-4 mb-3">
+                                                        <div className="flex items-center gap-4 flex-1 min-w-0">
+                                                            <div className="flex-1 min-w-0">
+                                                                <h4 className="font-medium text-gray-800 text-base">
+                                                                    {student.studentName} - {classInfo?.className}
+                                                                </h4>
+                                                            </div>
+                                                            <span className={`px-3 py-1 rounded-full text-sm font-bold whitespace-nowrap ${isPaid
+                                                                ? 'bg-green-100 text-green-700 border border-green-400'
+                                                                : 'bg-red-100 text-red-700 border border-red-400'
+                                                                }`}>
+                                                                {isPaid ? '✅ Đã đóng' : '❌ Chưa đóng'}
+                                                            </span>
+                                                        </div>
+
+                                                        <div className="flex items-center gap-2 flex-shrink-0">
+                                                            {student.phoneNumber ? (
+                                                                <button
+                                                                    onClick={() => {
+                                                                        // Mở Zalo chat với số điện thoại
+                                                                        const phone = student.phoneNumber.replace(/[^0-9]/g, ''); // Xóa ký tự đặc biệt
+                                                                        window.open(`https://zalo.me/${phone}`, '_blank');
+                                                                    }}
+                                                                    className="px-3 py-1 bg-blue-100 text-blue-600 rounded text-sm hover:bg-blue-200 transition-colors"
+                                                                >
+                                                                    🟦 {student.phoneNumber}
+                                                                </button>
+                                                            ) : (
+                                                                <span className="text-gray-500 text-sm px-3 py-1">
+                                                                    Chưa có SĐT
+                                                                </span>
+                                                            )}
+
+                                                            <button
+                                                                onClick={() => navigator.clipboard.writeText(previewMessage)}
+                                                                className="px-3 py-1 bg-blue-600 text-white rounded text-sm hover:bg-blue-700 transition-colors"
+                                                            >
+                                                                📋 Copy
+                                                            </button>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="bg-gray-50 p-3 rounded text-sm whitespace-pre-line">
+                                                        {previewMessage}
+                                                    </div>
                                                 </div>
                                             </div>
                                         ));

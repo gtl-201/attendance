@@ -70,6 +70,20 @@ interface AttendanceProps {
 }
 
 
+const sendZaloOAMessage = (phone: any, message: any) => {
+    // Copy tin nhắn vào clipboard
+    navigator.clipboard.writeText(message).then(() => {
+        // Mở chat Zalo
+        window.open(`https://chat.zalo.me/?phone=${phone}`, '_blank');
+        // Thông báo cho user
+        alert('✅ Tin nhắn đã copy! Paste (Ctrl+V) vào chat box.');
+    }).catch(() => {
+        // Nếu không copy được, chỉ mở chat
+        window.open(`https://chat.zalo.me/?phone=${phone}`, '_blank');
+        alert('Vui lòng copy tin nhắn thủ công.');
+    });
+};
+
 
 const Attendance: React.FC<AttendanceProps> = ({ user }) => {
     const navigate = useNavigate();
@@ -1455,151 +1469,153 @@ const Attendance: React.FC<AttendanceProps> = ({ user }) => {
                                                                 </tr>
                                                             </thead>
                                                             <tbody className="bg-white divide-y divide-gray-200">
-                                                                {Object.entries(studentStats).map(([studentId, stats], index) => (
-                                                                    <tr
-                                                                        key={studentId}
-                                                                        className={`${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'} hover:bg-blue-50 transition-colors cursor-pointer`}
-                                                                        onClick={() => handleStudentClick(studentId, stats.name)}
-                                                                    >
-                                                                        <td className="px-2 sm:px-6 py-2 sm:py-4">
-                                                                            <div className="font-medium text-gray-900 text-xs sm:text-sm leading-tight flex items-center gap-2">
-                                                                                {stats.name}
-                                                                                <span className="text-blue-500 text-xs">👆</span>
-                                                                            </div>
-                                                                            {/* Mobile: Show excused count under name */}
-                                                                            <div className="sm:hidden text-xs text-gray-500 mt-1">
-                                                                                Xin nghỉ: {stats.excused}
-                                                                            </div>
-                                                                        </td>
+                                                                {Object.entries(studentStats)
+                                                                    .filter(([studentId, stats]) => stats.name !== "Unknown Student")
+                                                                    .map(([studentId, stats], index) => (
+                                                                        <tr
+                                                                            key={studentId}
+                                                                            className={`${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'} hover:bg-blue-50 transition-colors cursor-pointer`}
+                                                                            onClick={() => handleStudentClick(studentId, stats.name)}
+                                                                        >
+                                                                            <td className="px-2 sm:px-6 py-2 sm:py-4">
+                                                                                <div className="font-medium text-gray-900 text-xs sm:text-sm leading-tight flex items-center gap-2">
+                                                                                    {stats.name}
+                                                                                    <span className="text-blue-500 text-xs">👆</span>
+                                                                                </div>
+                                                                                {/* Mobile: Show excused count under name */}
+                                                                                <div className="sm:hidden text-xs text-gray-500 mt-1">
+                                                                                    Xin nghỉ: {stats.excused}
+                                                                                </div>
+                                                                            </td>
 
-                                                                        <td className="px-1 sm:px-3 py-2 sm:py-4 text-center">
-                                                                            <span className="inline-flex items-center justify-center w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-green-100 text-green-800 font-bold text-xs sm:text-sm">
-                                                                                {stats.present}
-                                                                            </span>
-                                                                        </td>
+                                                                            <td className="px-1 sm:px-3 py-2 sm:py-4 text-center">
+                                                                                <span className="inline-flex items-center justify-center w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-green-100 text-green-800 font-bold text-xs sm:text-sm">
+                                                                                    {stats.present}
+                                                                                </span>
+                                                                            </td>
 
-                                                                        <td className="px-1 sm:px-3 py-2 sm:py-4 text-center">
-                                                                            <span className="inline-flex items-center justify-center w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-yellow-100 text-yellow-800 font-bold text-xs sm:text-sm">
-                                                                                {stats.late}
-                                                                            </span>
-                                                                        </td>
+                                                                            <td className="px-1 sm:px-3 py-2 sm:py-4 text-center">
+                                                                                <span className="inline-flex items-center justify-center w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-yellow-100 text-yellow-800 font-bold text-xs sm:text-sm">
+                                                                                    {stats.late}
+                                                                                </span>
+                                                                            </td>
 
-                                                                        <td className="px-1 sm:px-3 py-2 sm:py-4 text-center hidden sm:table-cell">
-                                                                            <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-blue-100 text-blue-800 font-bold text-sm">
-                                                                                {stats.excused}
-                                                                            </span>
-                                                                        </td>
+                                                                            <td className="px-1 sm:px-3 py-2 sm:py-4 text-center hidden sm:table-cell">
+                                                                                <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-blue-100 text-blue-800 font-bold text-sm">
+                                                                                    {stats.excused}
+                                                                                </span>
+                                                                            </td>
 
-                                                                        <td className="px-1 sm:px-3 py-2 sm:py-4 text-center">
-                                                                            <span className="inline-flex items-center justify-center w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-red-100 text-red-800 font-bold text-xs sm:text-sm">
-                                                                                {stats.absent}
-                                                                            </span>
-                                                                        </td>
+                                                                            <td className="px-1 sm:px-3 py-2 sm:py-4 text-center">
+                                                                                <span className="inline-flex items-center justify-center w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-red-100 text-red-800 font-bold text-xs sm:text-sm">
+                                                                                    {stats.absent}
+                                                                                </span>
+                                                                            </td>
 
-                                                                        <td className="px-1 sm:px-3 py-2 sm:py-4 text-center">
-                                                                            <span className="inline-flex items-center justify-center w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-indigo-100 text-indigo-800 font-bold text-xs sm:text-sm">
-                                                                                {stats.makeup}
-                                                                            </span>
-                                                                        </td>
+                                                                            <td className="px-1 sm:px-3 py-2 sm:py-4 text-center">
+                                                                                <span className="inline-flex items-center justify-center w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-indigo-100 text-indigo-800 font-bold text-xs sm:text-sm">
+                                                                                    {stats.makeup}
+                                                                                </span>
+                                                                            </td>
 
-                                                                        <td className="px-2 sm:px-6 py-2 sm:py-4 text-right">
-                                                                            <div className="font-bold text-sm sm:text-lg text-green-600">
-                                                                                <span className="hidden sm:inline">{stats.totalFee.toLocaleString('vi-VN')}₫</span>
-                                                                                <span className="sm:hidden">{(stats.totalFee / 1000).toFixed(0)}k₫</span>
-                                                                            </div>
-                                                                            <div className="text-xs text-gray-500">
-                                                                                {stats.present + stats.late + stats.absent} buổi tính phí
-                                                                            </div>
-                                                                        </td>
-                                                                        <td className="px-2 sm:px-6 py-2 sm:py-4 text-center">
-                                                                            {(() => {
-                                                                                const months = getMonthsInRange(dateFrom, dateTo);
+                                                                            <td className="px-2 sm:px-6 py-2 sm:py-4 text-right">
+                                                                                <div className="font-bold text-sm sm:text-lg text-green-600">
+                                                                                    <span className="hidden sm:inline">{stats.totalFee.toLocaleString('vi-VN')}₫</span>
+                                                                                    <span className="sm:hidden">{(stats.totalFee / 1000).toFixed(0)}k₫</span>
+                                                                                </div>
+                                                                                <div className="text-xs text-gray-500">
+                                                                                    {stats.present + stats.late + stats.absent} buổi tính phí
+                                                                                </div>
+                                                                            </td>
+                                                                            <td className="px-2 sm:px-6 py-2 sm:py-4 text-center">
+                                                                                {(() => {
+                                                                                    const months = getMonthsInRange(dateFrom, dateTo);
 
-                                                                                // Nếu chỉ có 1 tháng, hiển thị như cũ
-                                                                                if (months.length === 1) {
-                                                                                    const month = months[0];
-                                                                                    const key = getPaymentKey(studentId, classId, month);
-                                                                                    const paid = paymentStatus[key] === 'paid';
+                                                                                    // Nếu chỉ có 1 tháng, hiển thị như cũ
+                                                                                    if (months.length === 1) {
+                                                                                        const month = months[0];
+                                                                                        const key = getPaymentKey(studentId, classId, month);
+                                                                                        const paid = paymentStatus[key] === 'paid';
 
+                                                                                        return (
+                                                                                            <button
+                                                                                                onClick={e => {
+                                                                                                    e.stopPropagation();
+                                                                                                    togglePaymentStatus(studentId, classId);
+                                                                                                }}
+                                                                                                className={`px-3 py-1 rounded-full text-xs font-bold transition-colors ${paid
+                                                                                                    ? 'bg-green-100 text-green-700 border border-green-400'
+                                                                                                    : 'bg-red-100 text-red-700 border border-red-400'
+                                                                                                    }`}
+                                                                                                title={paid ? 'Đã đóng' : 'Chưa đóng'}
+                                                                                            >
+                                                                                                {paid ? 'Đã đóng' : 'Chưa đóng'}
+                                                                                            </button>
+                                                                                        );
+                                                                                    }
+
+                                                                                    // Nếu có nhiều tháng, hiển thị từng tháng
                                                                                     return (
-                                                                                        <button
-                                                                                            onClick={e => {
-                                                                                                e.stopPropagation();
-                                                                                                togglePaymentStatus(studentId, classId);
-                                                                                            }}
-                                                                                            className={`px-3 py-1 rounded-full text-xs font-bold transition-colors ${paid
-                                                                                                ? 'bg-green-100 text-green-700 border border-green-400'
-                                                                                                : 'bg-red-100 text-red-700 border border-red-400'
-                                                                                                }`}
-                                                                                            title={paid ? 'Đã đóng' : 'Chưa đóng'}
-                                                                                        >
-                                                                                            {paid ? 'Đã đóng' : 'Chưa đóng'}
-                                                                                        </button>
+                                                                                        <div className="space-y-1">
+                                                                                            {months.map(month => {
+                                                                                                const key = getPaymentKey(studentId, classId, month);
+                                                                                                const paid = paymentStatus[key] === 'paid';
+                                                                                                const monthName = new Date(month + '-01').toLocaleDateString('vi-VN', {
+                                                                                                    month: 'short'
+                                                                                                });
+
+                                                                                                return (
+                                                                                                    <button
+                                                                                                        key={month}
+                                                                                                        onClick={e => {
+                                                                                                            e.stopPropagation();
+                                                                                                            togglePaymentStatusForMonth(studentId, classId, month);
+                                                                                                        }}
+                                                                                                        className={`w-full px-2 py-0.5 rounded text-xs font-bold transition-colors ${paid
+                                                                                                            ? 'bg-green-100 text-green-700 border border-green-400'
+                                                                                                            : 'bg-red-100 text-red-700 border border-red-400'
+                                                                                                            }`}
+                                                                                                        title={`${monthName}: ${paid ? 'Đã đóng' : 'Chưa đóng'}`}
+                                                                                                    >
+                                                                                                        <span className="block text-xs">{monthName}</span>
+                                                                                                        <span className="block text-xs">{paid ? '✓' : '✗'}</span>
+                                                                                                    </button>
+                                                                                                );
+                                                                                            })}
+                                                                                        </div>
                                                                                     );
-                                                                                }
-
-                                                                                // Nếu có nhiều tháng, hiển thị từng tháng
-                                                                                return (
-                                                                                    <div className="space-y-1">
-                                                                                        {months.map(month => {
-                                                                                            const key = getPaymentKey(studentId, classId, month);
-                                                                                            const paid = paymentStatus[key] === 'paid';
-                                                                                            const monthName = new Date(month + '-01').toLocaleDateString('vi-VN', {
-                                                                                                month: 'short'
-                                                                                            });
-
-                                                                                            return (
-                                                                                                <button
-                                                                                                    key={month}
-                                                                                                    onClick={e => {
-                                                                                                        e.stopPropagation();
-                                                                                                        togglePaymentStatusForMonth(studentId, classId, month);
-                                                                                                    }}
-                                                                                                    className={`w-full px-2 py-0.5 rounded text-xs font-bold transition-colors ${paid
-                                                                                                        ? 'bg-green-100 text-green-700 border border-green-400'
-                                                                                                        : 'bg-red-100 text-red-700 border border-red-400'
-                                                                                                        }`}
-                                                                                                    title={`${monthName}: ${paid ? 'Đã đóng' : 'Chưa đóng'}`}
-                                                                                                >
-                                                                                                    <span className="block text-xs">{monthName}</span>
-                                                                                                    <span className="block text-xs">{paid ? '✓' : '✗'}</span>
-                                                                                                </button>
-                                                                                            );
-                                                                                        })}
-                                                                                    </div>
-                                                                                );
-                                                                            })()}
-                                                                        </td>
-                                                                    </tr>
-                                                                ))}
+                                                                                })()}
+                                                                            </td>
+                                                                        </tr>
+                                                                    ))}
                                                             </tbody>
 
                                                             {/* Class Summary */}
                                                             <tfoot className="bg-blue-50 border-t-2 border-blue-200">
                                                                 <tr>
                                                                     <td className="px-2 sm:px-6 py-2 sm:py-4 font-bold text-gray-700 text-xs sm:text-sm">
-                                                                        <span className="block sm:hidden">Tổng ({Object.keys(studentStats).length} HS)</span>
-                                                                        <span className="hidden sm:block">Tổng lớp ({Object.keys(studentStats).length} học sinh)</span>
+                                                                        <span className="block sm:hidden">Tổng ({Object.entries(studentStats).filter(([id, stats]) => stats.name !== "Unknown Student").length} HS)</span>
+                                                                        <span className="hidden sm:block">Tổng lớp ({Object.entries(studentStats).filter(([id, stats]) => stats.name !== "Unknown Student").length} học sinh)</span>
                                                                     </td>
                                                                     <td className="px-1 sm:px-3 py-2 sm:py-4 text-center font-bold text-green-600 text-xs sm:text-sm">
-                                                                        {Object.values(studentStats).reduce((sum, s) => sum + s.present, 0)}
+                                                                        {Object.values(studentStats).filter(s => s.name !== "Unknown Student").reduce((sum, s) => sum + s.present, 0)}
                                                                     </td>
                                                                     <td className="px-1 sm:px-3 py-2 sm:py-4 text-center font-bold text-yellow-600 text-xs sm:text-sm">
-                                                                        {Object.values(studentStats).reduce((sum, s) => sum + s.late, 0)}
+                                                                        {Object.values(studentStats).filter(s => s.name !== "Unknown Student").reduce((sum, s) => sum + s.late, 0)}
                                                                     </td>
                                                                     <td className="px-1 sm:px-3 py-2 sm:py-4 text-center font-bold text-blue-600 hidden sm:table-cell">
-                                                                        {Object.values(studentStats).reduce((sum, s) => sum + s.excused, 0)}
+                                                                        {Object.values(studentStats).filter(s => s.name !== "Unknown Student").reduce((sum, s) => sum + s.excused, 0)}
                                                                     </td>
                                                                     <td className="px-1 sm:px-3 py-2 sm:py-4 text-center font-bold text-red-600 text-xs sm:text-sm">
-                                                                        {Object.values(studentStats).reduce((sum, s) => sum + s.absent, 0)}
+                                                                        {Object.values(studentStats).filter(s => s.name !== "Unknown Student").reduce((sum, s) => sum + s.absent, 0)}
                                                                     </td>
                                                                     <td className="px-1 sm:px-3 py-2 sm:py-4 text-center font-bold text-red-600 text-xs sm:text-sm">
-                                                                        {Object.values(studentStats).reduce((sum, s) => sum + s.makeup, 0)}
+                                                                        {Object.values(studentStats).filter(s => s.name !== "Unknown Student").reduce((sum, s) => sum + s.makeup, 0)}
                                                                     </td>
                                                                     <td className="px-2 sm:px-6 py-2 sm:py-4 text-right">
                                                                         <div className="font-bold text-base sm:text-xl text-green-600">
                                                                             {(() => {
-                                                                                const classTotal = Object.values(studentStats).reduce((sum, s) => sum + s.totalFee, 0);
+                                                                                const classTotal = Object.values(studentStats).filter(s => s.name !== "Unknown Student").reduce((sum, s) => sum + s.totalFee, 0);
                                                                                 return (
                                                                                     <>
                                                                                         <span className="hidden sm:inline">{classTotal.toLocaleString('vi-VN')}₫</span>
@@ -2758,11 +2774,13 @@ const Attendance: React.FC<AttendanceProps> = ({ user }) => {
                                                                 <div className="mb-3">
                                                                     {student.phoneNumber ? (
                                                                         <button
-                                                                            onClick={() => {
-                                                                                // Mở Zalo chat với số điện thoại
-                                                                                const phone = student.phoneNumber.replace(/[^0-9]/g, ''); // Xóa ký tự đặc biệt
-                                                                                window.open(`https://zalo.me/${phone}`, '_blank');
-                                                                            }}
+                                                                            // onClick={() => {
+                                                                            //     // Mở Zalo chat với số điện thoại
+                                                                            //     const phone = student.phoneNumber.replace(/[^0-9]/g, ''); // Xóa ký tự đặc biệt
+                                                                            //     window.open(`https://chat.zalo.me/?phone=${phone}`, '_blank');
+                                                                            // }}
+                                                                            onClick={() => sendZaloOAMessage(student.phoneNumber.replace(/[^0-9]/g, ''), previewMessage)}
+
                                                                             className="w-full px-3 py-2 bg-blue-100 text-blue-600 rounded text-sm hover:bg-blue-200 transition-colors"
                                                                         >
                                                                             🟦 {student.phoneNumber} (Zalo)
@@ -2781,12 +2799,12 @@ const Attendance: React.FC<AttendanceProps> = ({ user }) => {
                                                             </div>
 
                                                             {/* Action Button */}
-                                                            <button
+                                                            {/* <button
                                                                 onClick={() => navigator.clipboard.writeText(previewMessage)}
                                                                 className="w-full px-4 py-2 bg-blue-600 text-white rounded text-sm hover:bg-blue-700 transition-colors"
                                                             >
                                                                 📋 Sao chép tin nhắn
-                                                            </button>
+                                                            </button> */}
                                                         </div>
 
                                                         {/* Tablet Layout */}
@@ -2815,11 +2833,13 @@ const Attendance: React.FC<AttendanceProps> = ({ user }) => {
                                                             <div className="flex gap-2 mb-3">
                                                                 {student.phoneNumber ? (
                                                                     <button
-                                                                        onClick={() => {
-                                                                            // Mở Zalo chat với số điện thoại
-                                                                            const phone = student.phoneNumber.replace(/[^0-9]/g, ''); // Xóa ký tự đặc biệt
-                                                                            window.open(`https://zalo.me/${phone}`, '_blank');
-                                                                        }}
+                                                                        // onClick={() => {
+                                                                        //     // Mở Zalo chat với số điện thoại
+                                                                        //     const phone = student.phoneNumber.replace(/[^0-9]/g, ''); // Xóa ký tự đặc biệt
+                                                                        //     window.open(`https://chat.zalo.me/?phone=${phone}`, '_blank');
+                                                                        // }}
+                                                                        onClick={() => sendZaloOAMessage(student.phoneNumber.replace(/[^0-9]/g, ''), previewMessage)}
+
                                                                         className="flex-1 px-3 py-2 bg-blue-100 text-blue-600 rounded text-sm hover:bg-blue-200 transition-colors"
                                                                     >
                                                                         🟦 {student.phoneNumber} (Zalo)
@@ -2829,12 +2849,12 @@ const Attendance: React.FC<AttendanceProps> = ({ user }) => {
                                                                         Chưa có số điện thoại
                                                                     </div>
                                                                 )}
-                                                                <button
+                                                                {/* <button
                                                                     onClick={() => navigator.clipboard.writeText(previewMessage)}
                                                                     className="px-4 py-2 bg-blue-600 text-white rounded text-sm hover:bg-blue-700 transition-colors whitespace-nowrap"
                                                                 >
                                                                     📋 Sao chép
-                                                                </button>
+                                                                </button> */}
                                                             </div>
 
                                                             {/* Message Preview */}
@@ -2863,11 +2883,12 @@ const Attendance: React.FC<AttendanceProps> = ({ user }) => {
                                                                 <div className="flex items-center gap-2 flex-shrink-0">
                                                                     {student.phoneNumber ? (
                                                                         <button
-                                                                            onClick={() => {
-                                                                                // Mở Zalo chat với số điện thoại
-                                                                                const phone = student.phoneNumber.replace(/[^0-9]/g, ''); // Xóa ký tự đặc biệt
-                                                                                window.open(`https://zalo.me/${phone}`, '_blank');
-                                                                            }}
+                                                                            // onClick={() => {
+                                                                            //     const phone = student.phoneNumber.replace(/[^0-9]/g, ''); // Xóa ký tự đặc biệt
+                                                                            //     window.open(`https://chat.zalo.me/?phone=${phone}`, '_blank');
+                                                                            // }}
+                                                                            onClick={() => sendZaloOAMessage(student.phoneNumber.replace(/[^0-9]/g, ''), previewMessage)}
+
                                                                             className="px-3 py-1 bg-blue-100 text-blue-600 rounded text-sm hover:bg-blue-200 transition-colors"
                                                                         >
                                                                             🟦 {student.phoneNumber}
@@ -2878,12 +2899,12 @@ const Attendance: React.FC<AttendanceProps> = ({ user }) => {
                                                                         </span>
                                                                     )}
 
-                                                                    <button
+                                                                    {/* <button
                                                                         onClick={() => navigator.clipboard.writeText(previewMessage)}
                                                                         className="px-3 py-1 bg-blue-600 text-white rounded text-sm hover:bg-blue-700 transition-colors"
                                                                     >
                                                                         📋 Copy
-                                                                    </button>
+                                                                    </button> */}
                                                                 </div>
                                                             </div>
 

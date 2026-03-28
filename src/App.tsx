@@ -149,7 +149,7 @@ export default function App(): JSX.Element {
                 <Link to="/attendance" onClick={closeMenu}>Điểm Danh</Link>
                 <Link to="/classList" onClick={closeMenu}>Quản Lý Lớp</Link>
                 <Link to="/gold" onClick={closeMenu}>Giá Vàng</Link>
-                <button onClick={handleLogout} className="logout-btn">
+                <button onClick={() => { handleLogout(); closeMenu(); }} className="logout-btn">
                   Đăng xuất
                 </button>
               </div>

@@ -3,7 +3,6 @@ import './App.css';
 import { BrowserRouter as Router, Routes, Route, Navigate, Link } from 'react-router-dom';
 import { auth, db } from './firebase';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
-import { collection, getDocs, query, orderBy } from 'firebase/firestore';
 import { User } from 'firebase/auth';
 
 import SignUp from './screen/signIn/SignUpScreen';
@@ -13,15 +12,7 @@ import CreateClass from './screen/classroom/CreateClassScreen';
 import ClassList from './screen/classroom/ClassListScreen';
 import StudentList from './screen/classroom/studentList';
 import Attendance from './screen/classroom/a';
-
-// Interface definitions
-interface AttendanceRecord {
-  id: string;
-  userId: string;
-  userEmail: string;
-  timestamp: Date;
-  status: string;
-}
+import GoldPrice from './screen/classroom/goldPrices';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -94,10 +85,8 @@ const PublicRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
 
 export default function App(): JSX.Element {
   const [user, setUser] = useState<User | null>(null);
-  const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [isMenuOpen, setIsMenuOpen] = useState<boolean>(false);
-  console.log(attendanceRecords);
 
   // Function toggle menu
   const toggleMenu = (): void => {
@@ -119,20 +108,6 @@ export default function App(): JSX.Element {
     return () => unsubscribe();
   }, []);
 
-  // Fetch attendance records from Firestore
-  const fetchAttendance = async (): Promise<void> => {
-    try {
-      const q = query(collection(db, 'attendance'), orderBy('timestamp', 'desc'));
-      const querySnapshot = await getDocs(q);
-      const records: AttendanceRecord[] = [];
-      querySnapshot.forEach((doc) => {
-        records.push({ id: doc.id, ...doc.data() } as AttendanceRecord);
-      });
-      setAttendanceRecords(records);
-    } catch (error) {
-      console.error('Error fetching attendance:', error);
-    }
-  };
   // Logout function
   const handleLogout = async (): Promise<void> => {
     try {
@@ -143,13 +118,6 @@ export default function App(): JSX.Element {
     }
   };
 
-  // Load attendance records when user logs in
-  useEffect(() => {
-    if (user && user.emailVerified) {
-      fetchAttendance();
-    }
-  }, [user]);
-
   if (loading) {
     return (
       <div className="loading-container">
@@ -158,6 +126,8 @@ export default function App(): JSX.Element {
       </div>
     );
   }
+
+
 
   return (
     <div className='min-h-full flex flex-col justify-between bg-[#F5F5F5]'>
@@ -178,6 +148,7 @@ export default function App(): JSX.Element {
               <div className={`nav-links ${isMenuOpen ? 'active' : ''}`}>
                 <Link to="/attendance" onClick={closeMenu}>Điểm Danh</Link>
                 <Link to="/classList" onClick={closeMenu}>Quản Lý Lớp</Link>
+                <Link to="/gold" onClick={closeMenu}>Giá Vàng</Link>
                 <button onClick={handleLogout} className="logout-btn">
                   Đăng xuất
                 </button>
@@ -256,6 +227,15 @@ export default function App(): JSX.Element {
                 element={
                   <ProtectedRoute>
                     <Attendance user={user} />
+                  </ProtectedRoute>
+                }
+              />
+
+              <Route
+                path="/gold"
+                element={
+                  <ProtectedRoute>
+                    <GoldPrice user={user} />
                   </ProtectedRoute>
                 }
               />

@@ -4,6 +4,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate, Link } from 'react-ro
 import { auth, db } from './firebase';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { User } from 'firebase/auth';
+import { collection, getDocs, query, orderBy } from 'firebase/firestore';
 
 import SignUp from './screen/signIn/SignUpScreen';
 import SignIn from './screen/signIn/SignInScreen';
@@ -14,6 +15,14 @@ import StudentList from './screen/classroom/studentList';
 import Attendance from './screen/classroom/a';
 import GoldPrice from './screen/classroom/goldPrices';
 
+// Interface definitions
+interface AttendanceRecord {
+  id: string;
+  userId: string;
+  userEmail: string;
+  timestamp: Date;
+  status: string;
+}
 interface ProtectedRouteProps {
   children: React.ReactNode;
 }
@@ -87,12 +96,12 @@ export default function App(): JSX.Element {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [isMenuOpen, setIsMenuOpen] = useState<boolean>(false);
-
+  const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
   // Function toggle menu
   const toggleMenu = (): void => {
     setIsMenuOpen(!isMenuOpen);
   };
-
+  console.log(attendanceRecords);
   // Function đóng menu khi click vào link
   const closeMenu = (): void => {
     setIsMenuOpen(false);
@@ -108,6 +117,21 @@ export default function App(): JSX.Element {
     return () => unsubscribe();
   }, []);
 
+  // Fetch attendance records from Firestore
+  const fetchAttendance = async (): Promise<void> => {
+    try {
+      const q = query(collection(db, 'attendance'), orderBy('timestamp', 'desc'));
+      const querySnapshot = await getDocs(q);
+      const records: AttendanceRecord[] = [];
+      querySnapshot.forEach((doc) => {
+        records.push({ id: doc.id, ...doc.data() } as AttendanceRecord);
+      });
+      setAttendanceRecords(records);
+    } catch (error) {
+      console.error('Error fetching attendance:', error);
+    }
+  };
+
   // Logout function
   const handleLogout = async (): Promise<void> => {
     try {
@@ -118,6 +142,13 @@ export default function App(): JSX.Element {
     }
   };
 
+  // Load attendance records when user logs in
+  useEffect(() => {
+    if (user && user.emailVerified) {
+      fetchAttendance();
+    }
+  }, [user]);
+
   if (loading) {
     return (
       <div className="loading-container">
@@ -126,7 +157,6 @@ export default function App(): JSX.Element {
       </div>
     );
   }
-
 
 
   return (

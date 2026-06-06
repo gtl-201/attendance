@@ -8,7 +8,8 @@ import {
   where,
   onSnapshot,
   deleteDoc,
-  doc
+  doc,
+  updateDoc,
 } from "firebase/firestore";
 
 interface PurchaseData {
@@ -19,6 +20,9 @@ interface PurchaseData {
   createdAt: any;
   purchaseDate: string;
   userId: string;
+  sold?: boolean;
+  sellPrice?: number;
+  sellDate?: string;
 }
 
 interface GoldPriceProps {
@@ -45,14 +49,12 @@ const GoldPriceScreen: React.FC<GoldPriceProps> = ({ user }) => {
     return () => window.removeEventListener("resize", h);
   }, []);
 
-  // Form
   const [purchaseQuantity, setPurchaseQuantity] = useState("");
   const [purchasePrice, setPurchasePrice] = useState("");
   const [selectedGoldType, setSelectedGoldType] = useState(FIXED_GOLD_TYPES[0]);
   const [purchaseDate, setPurchaseDate] = useState(new Date().toISOString().split("T")[0]);
   const [saving, setSaving] = useState(false);
 
-  // Firestore
   const [purchases, setPurchases] = useState<PurchaseData[]>([]);
   useEffect(() => {
     if (!user?.uid) return;
@@ -68,16 +70,28 @@ const GoldPriceScreen: React.FC<GoldPriceProps> = ({ user }) => {
     });
   }, [user?.uid]);
 
-  // Giá hiện tại người dùng nhập — key = goldType (chính xác)
   const [currentPrices, setCurrentPrices] = useState<Record<string, string>>({});
+  const [activeTab, setActiveTab] = useState<"holding" | "sold">("holding");
 
-  // Helpers
   const parsePrice = (str: string) => parseInt((str || "0").replace(/\./g, "").replace(/,/g, "") || "0") || 0;
   const formatCurrency = (v: string) => v.replace(/[^0-9]/g, "").replace(/\B(?=(\d{3})+(?!\d))/g, ".");
 
   const handleDelete = async (id: string) => {
     if (!window.confirm("Xóa giao dịch này?")) return;
     try { await deleteDoc(doc(db, "goldPurchases", id)); } catch { alert("Không thể xóa."); }
+  };
+
+  const handleSell = async (p: PurchaseData) => {
+    const sellPrice = parsePrice(currentPrices[p.goldType] || "");
+    if (!sellPrice) return;
+    if (!window.confirm(`Xác nhận bán ${p.quantity} chỉ "${p.goldType}" với giá ${sellPrice.toLocaleString("vi-VN")}₫/chỉ?`)) return;
+    try {
+      await updateDoc(doc(db, "goldPurchases", p.id), {
+        sold: true,
+        sellPrice,
+        sellDate: new Date().toISOString().split("T")[0],
+      });
+    } catch { alert("❌ Không thể cập nhật."); }
   };
 
   const handleSave = async (e: React.FormEvent) => {
@@ -94,21 +108,21 @@ const GoldPriceScreen: React.FC<GoldPriceProps> = ({ user }) => {
         purchasePrice: parsePrice(purchasePrice),
         purchaseDate,
         createdAt: serverTimestamp(),
+        sold: false,
       });
       setPurchaseQuantity(""); setPurchasePrice("");
     } catch { alert("❌ Không thể lưu dữ liệu."); }
     finally { setSaving(false); }
   };
 
-  // Các loại vàng duy nhất trong danh mục đã mua
-  const uniqueTypes = Array.from(new Set(purchases.map((p) => p.goldType)));
+  const holdingPurchases = purchases.filter((p) => !p.sold);
+  const soldPurchases = purchases.filter((p) => p.sold);
+  const uniqueTypes = Array.from(new Set(holdingPurchases.map((p) => p.goldType)));
 
-  // Tính lãi / lỗ
   const summary = (() => {
     let totalInvestment = 0, currentValue = 0;
     let allEntered = uniqueTypes.length > 0;
-
-    const rows = purchases.map((p) => {
+    const rows = holdingPurchases.map((p) => {
       const curPrice = parsePrice(currentPrices[p.goldType] || "");
       const investment = p.quantity * p.purchasePrice;
       const curVal = curPrice > 0 ? p.quantity * curPrice : 0;
@@ -117,11 +131,22 @@ const GoldPriceScreen: React.FC<GoldPriceProps> = ({ user }) => {
       if (curPrice > 0) currentValue += curVal; else allEntered = false;
       return { ...p, curPrice, investment, curVal, profit };
     });
-
     return { rows, totalInvestment, currentValue, totalProfit: currentValue - totalInvestment, allEntered };
   })();
 
-  // ── Styles ──
+  const soldSummary = (() => {
+    let totalInvestment = 0, totalRevenue = 0;
+    const rows = soldPurchases.map((p) => {
+      const investment = p.quantity * p.purchasePrice;
+      const revenue = p.quantity * (p.sellPrice || 0);
+      const profit = revenue - investment;
+      totalInvestment += investment;
+      totalRevenue += revenue;
+      return { ...p, investment, revenue, profit };
+    });
+    return { rows, totalInvestment, totalRevenue, totalProfit: totalRevenue - totalInvestment };
+  })();
+
   const s: Record<string, CSSProperties> = {
     page: {
       minHeight: "100vh",
@@ -207,6 +232,9 @@ const GoldPriceScreen: React.FC<GoldPriceProps> = ({ user }) => {
       <style>{`
         .grow-row:hover { background: rgba(255,255,255,0.04) !important; }
         .gold-input:focus { border-color: rgba(74,222,128,0.5) !important; box-shadow: 0 0 0 2px rgba(74,222,128,0.1); outline: none; }
+        .sell-btn { transition: all 0.15s; }
+        .sell-btn:not(:disabled):hover { background: rgba(74,222,128,0.25) !important; border-color: rgba(74,222,128,0.6) !important; }
+        .tab-btn { transition: all 0.2s; }
       `}</style>
 
       {/* Header */}
@@ -221,12 +249,12 @@ const GoldPriceScreen: React.FC<GoldPriceProps> = ({ user }) => {
 
       <div style={s.maxW}>
 
-        {/* ── BẢNG GIÁ MUA VÀO HIỆN TẠI — chỉ loại vàng đã mua ── */}
+        {/* Bảng giá hiện tại — chỉ loại đang giữ */}
         {uniqueTypes.length > 0 && (
           <div style={s.card}>
             <div style={s.cardHead}>
               <span style={{ fontSize: 14, fontWeight: "bold", color: "#fbbf24" }}>📋 Giá Mua Vào Hiện Tại</span>
-              <span style={{ fontSize: 11, color: "#64748b" }}>Nhập để tính lãi / lỗ</span>
+              <span style={{ fontSize: 11, color: "#64748b" }}>Nhập để tính lãi / lỗ & bán</span>
             </div>
             <div style={s.tableHead}>
               <span style={s.thCell}>Loại Vàng</span>
@@ -263,105 +291,241 @@ const GoldPriceScreen: React.FC<GoldPriceProps> = ({ user }) => {
           gap: 24, alignItems: "start",
         }}>
 
-          {/* ── THỐNG KÊ TÀI SẢN ── */}
+          {/* Thống kê tài sản — có tab */}
           <div style={s.portfolioCard}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-              <h3 style={{ margin: 0, fontSize: 15, fontWeight: "bold" }}>📊 Tài Sản Của Tôi</h3>
-              {summary.allEntered && purchases.length > 0 && (
-                <span style={badgeStyle(summary.totalProfit)}>
-                  {summary.totalProfit >= 0 ? "📈 +" : "📉 "}
-                  {Math.abs(summary.totalProfit).toLocaleString("vi-VN")}₫
-                </span>
-              )}
+            {/* Tab header */}
+            <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+              {(["holding", "sold"] as const).map((tab) => (
+                <button
+                  key={tab}
+                  className="tab-btn"
+                  onClick={() => setActiveTab(tab)}
+                  style={{
+                    flex: 1, padding: "8px 0", borderRadius: 8, border: "none",
+                    cursor: "pointer", fontSize: 13, fontWeight: "bold",
+                    background: activeTab === tab
+                      ? "linear-gradient(90deg, #fbbf24, #f59e0b)"
+                      : "rgba(255,255,255,0.05)",
+                    color: activeTab === tab ? "#1e293b" : "#94a3b8",
+                  }}
+                >
+                  {tab === "holding"
+                    ? `📦 Đang Giữ (${holdingPurchases.length})`
+                    : `✅ Đã Bán (${soldPurchases.length})`}
+                </button>
+              ))}
             </div>
 
-            {purchases.length === 0 ? (
-              <div style={{ textAlign: "center", padding: "30px 0", color: "#475569", fontSize: 13 }}>
-                Chưa có giao dịch nào.<br />Thêm vàng đã mua ở form bên cạnh.
-              </div>
-            ) : (
+            {/* Tab: Đang giữ */}
+            {activeTab === "holding" && (
               <>
-                {/* Tổng vốn / giá trị */}
-                <div style={{
-                  display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16,
-                  background: "rgba(255,255,255,0.03)", borderRadius: 10, padding: 14,
-                }}>
-                  <div>
-                    <div style={{ fontSize: 10, color: "#64748b", marginBottom: 4, letterSpacing: "1px" }}>TỔNG VỐN</div>
-                    <div style={{ fontSize: 17, fontWeight: "bold" }}>{summary.totalInvestment.toLocaleString("vi-VN")}₫</div>
-                  </div>
-                  <div style={{ textAlign: "right" }}>
-                    <div style={{ fontSize: 10, color: "#64748b", marginBottom: 4, letterSpacing: "1px" }}>GIÁ TRỊ HIỆN TẠI</div>
-                    {summary.allEntered ? (
-                      <div style={{ fontSize: 17, fontWeight: "bold", color: "#fbbf24" }}>
-                        {summary.currentValue.toLocaleString("vi-VN")}₫
-                      </div>
-                    ) : (
-                      <div style={{ fontSize: 12, color: "#475569", fontStyle: "italic" }}>
-                        Nhập giá bên trên để xem
-                      </div>
-                    )}
-                  </div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+                  <h3 style={{ margin: 0, fontSize: 15, fontWeight: "bold" }}>📊 Tài Sản Đang Giữ</h3>
+                  {summary.allEntered && holdingPurchases.length > 0 && (
+                    <span style={badgeStyle(summary.totalProfit)}>
+                      {summary.totalProfit >= 0 ? "📈 +" : "📉 "}
+                      {Math.abs(summary.totalProfit).toLocaleString("vi-VN")}₫
+                    </span>
+                  )}
                 </div>
 
-                {/* Danh sách giao dịch */}
-                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  {summary.rows.map((p) => (
-                    <div key={p.id} style={{
-                      background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)",
-                      borderRadius: 10, padding: 12,
-                      display: "flex", justifyContent: "space-between", alignItems: "flex-start",
+                {holdingPurchases.length === 0 ? (
+                  <div style={{ textAlign: "center", padding: "30px 0", color: "#475569", fontSize: 13 }}>
+                    Chưa có giao dịch nào.<br />Thêm vàng đã mua ở form bên cạnh.
+                  </div>
+                ) : (
+                  <>
+                    <div style={{
+                      display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16,
+                      background: "rgba(255,255,255,0.03)", borderRadius: 10, padding: 14,
                     }}>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 6, marginBottom: 4 }}>
-                          <span style={{ fontSize: 12, fontWeight: "bold", color: "#f1f5f9" }}>{p.goldType}</span>
-                          <span style={{
-                            fontSize: 10, padding: "1px 6px", borderRadius: 4,
-                            background: "rgba(251,191,36,0.1)", color: "#fbbf24", fontWeight: 600,
+                      <div>
+                        <div style={{ fontSize: 10, color: "#64748b", marginBottom: 4, letterSpacing: "1px" }}>TỔNG VỐN</div>
+                        <div style={{ fontSize: 17, fontWeight: "bold" }}>{summary.totalInvestment.toLocaleString("vi-VN")}₫</div>
+                      </div>
+                      <div style={{ textAlign: "right" }}>
+                        <div style={{ fontSize: 10, color: "#64748b", marginBottom: 4, letterSpacing: "1px" }}>GIÁ TRỊ HIỆN TẠI</div>
+                        {summary.allEntered ? (
+                          <div style={{ fontSize: 17, fontWeight: "bold", color: "#fbbf24" }}>
+                            {summary.currentValue.toLocaleString("vi-VN")}₫
+                          </div>
+                        ) : (
+                          <div style={{ fontSize: 12, color: "#475569", fontStyle: "italic" }}>Nhập giá bên trên để xem</div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                      {summary.rows.map((p) => {
+                        const hasSellPrice = parsePrice(currentPrices[p.goldType] || "") > 0;
+                        return (
+                          <div key={p.id} style={{
+                            background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)",
+                            borderRadius: 10, padding: 12,
                           }}>
-                            {p.purchaseDate ? new Date(p.purchaseDate).toLocaleDateString("vi-VN") : "N/A"}
-                          </span>
-                        </div>
-                        <div style={{ fontSize: 12, color: "#94a3b8" }}>
-                          <span style={{ color: "#e2e8f0", fontWeight: 600 }}>{p.quantity} chỉ</span>
-                          {" × "}{p.purchasePrice.toLocaleString("vi-VN")}₫
-                        </div>
-                        <div style={{ fontSize: 11, color: "#475569", marginTop: 2 }}>
-                          Vốn: {p.investment.toLocaleString("vi-VN")}₫
-                          {p.curPrice > 0 && (
-                            <span style={{ marginLeft: 8 }}>
-                              · Giá hiện tại: <span style={{ color: "#fbbf24" }}>{p.curPrice.toLocaleString("vi-VN")}₫</span>
-                            </span>
-                          )}
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 6, marginBottom: 4 }}>
+                                  <span style={{ fontSize: 12, fontWeight: "bold", color: "#f1f5f9" }}>{p.goldType}</span>
+                                  <span style={{
+                                    fontSize: 10, padding: "1px 6px", borderRadius: 4,
+                                    background: "rgba(251,191,36,0.1)", color: "#fbbf24", fontWeight: 600,
+                                  }}>
+                                    {p.purchaseDate ? new Date(p.purchaseDate).toLocaleDateString("vi-VN") : "N/A"}
+                                  </span>
+                                </div>
+                                <div style={{ fontSize: 12, color: "#94a3b8" }}>
+                                  <span style={{ color: "#e2e8f0", fontWeight: 600 }}>{p.quantity} chỉ</span>
+                                  {" × "}{p.purchasePrice.toLocaleString("vi-VN")}₫
+                                </div>
+                                <div style={{ fontSize: 11, color: "#475569", marginTop: 2 }}>
+                                  Vốn: {p.investment.toLocaleString("vi-VN")}₫
+                                  {p.curPrice > 0 && (
+                                    <span style={{ marginLeft: 8 }}>
+                                      · Giá hiện tại: <span style={{ color: "#fbbf24" }}>{p.curPrice.toLocaleString("vi-VN")}₫</span>
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                              <div style={{ display: "flex", alignItems: "center", gap: 8, marginLeft: 10, flexShrink: 0 }}>
+                                <div style={{ textAlign: "right" }}>
+                                  {p.profit !== null ? (
+                                    <>
+                                      <div style={{ fontSize: 13, fontWeight: "bold", color: p.profit >= 0 ? "#4ade80" : "#f87171" }}>
+                                        {p.profit >= 0 ? "+" : ""}{p.profit.toLocaleString("vi-VN")}₫
+                                      </div>
+                                      <div style={{ fontSize: 10, color: "#64748b" }}>{p.profit >= 0 ? "📈 Lãi" : "📉 Lỗ"}</div>
+                                    </>
+                                  ) : (
+                                    <div style={{ fontSize: 11, color: "#334155", fontStyle: "italic" }}>Chưa có giá</div>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Hàng nút bên dưới */}
+                            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 10 }}>
+                              <button
+                                className="sell-btn"
+                                disabled={!hasSellPrice}
+                                onClick={() => handleSell(p)}
+                                title={!hasSellPrice ? "Nhập giá hiện tại bên trên để bán" : "Chốt bán với giá hiện tại"}
+                                style={{
+                                  padding: "5px 14px", borderRadius: 7, fontSize: 12, fontWeight: "bold",
+                                  border: "1px solid",
+                                  cursor: hasSellPrice ? "pointer" : "not-allowed",
+                                  background: hasSellPrice ? "rgba(74,222,128,0.1)" : "rgba(255,255,255,0.03)",
+                                  borderColor: hasSellPrice ? "rgba(74,222,128,0.35)" : "rgba(255,255,255,0.07)",
+                                  color: hasSellPrice ? "#4ade80" : "#334155",
+                                  opacity: hasSellPrice ? 1 : 0.5,
+                                }}
+                              >
+                                💸 Đã Bán
+                              </button>
+                              <button
+                                onClick={() => handleDelete(p.id)}
+                                style={{ background: "none", border: "none", color: "#ef4444", cursor: "pointer", fontSize: 16, padding: 4 }}
+                                title="Xóa"
+                              >🗑️</button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </>
+                )}
+              </>
+            )}
+
+            {/* Tab: Đã bán */}
+            {activeTab === "sold" && (
+              <>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+                  <h3 style={{ margin: 0, fontSize: 15, fontWeight: "bold" }}>✅ Lịch Sử Đã Bán</h3>
+                  {soldPurchases.length > 0 && (
+                    <span style={badgeStyle(soldSummary.totalProfit)}>
+                      {soldSummary.totalProfit >= 0 ? "📈 +" : "📉 "}
+                      {Math.abs(soldSummary.totalProfit).toLocaleString("vi-VN")}₫
+                    </span>
+                  )}
+                </div>
+
+                {soldPurchases.length === 0 ? (
+                  <div style={{ textAlign: "center", padding: "30px 0", color: "#475569", fontSize: 13 }}>
+                    Chưa có giao dịch nào được chốt bán.
+                  </div>
+                ) : (
+                  <>
+                    {/* Tổng kết đã bán */}
+                    <div style={{
+                      display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 16,
+                      background: "rgba(255,255,255,0.03)", borderRadius: 10, padding: 14,
+                    }}>
+                      <div>
+                        <div style={{ fontSize: 10, color: "#64748b", marginBottom: 4, letterSpacing: "1px" }}>TỔNG VỐN BỎ RA</div>
+                        <div style={{ fontSize: 14, fontWeight: "bold" }}>{soldSummary.totalInvestment.toLocaleString("vi-VN")}₫</div>
+                      </div>
+                      <div style={{ textAlign: "center" }}>
+                        <div style={{ fontSize: 10, color: "#64748b", marginBottom: 4, letterSpacing: "1px" }}>THU VỀ</div>
+                        <div style={{ fontSize: 14, fontWeight: "bold", color: "#fbbf24" }}>{soldSummary.totalRevenue.toLocaleString("vi-VN")}₫</div>
+                      </div>
+                      <div style={{ textAlign: "right" }}>
+                        <div style={{ fontSize: 10, color: "#64748b", marginBottom: 4, letterSpacing: "1px" }}>THỰC LÃI / LỖ</div>
+                        <div style={{ fontSize: 14, fontWeight: "bold", color: soldSummary.totalProfit >= 0 ? "#4ade80" : "#f87171" }}>
+                          {soldSummary.totalProfit >= 0 ? "+" : ""}{soldSummary.totalProfit.toLocaleString("vi-VN")}₫
                         </div>
                       </div>
-                      <div style={{ display: "flex", alignItems: "center", gap: 10, marginLeft: 10, flexShrink: 0 }}>
-                        <div style={{ textAlign: "right" }}>
-                          {p.profit !== null ? (
-                            <>
-                              <div style={{ fontSize: 13, fontWeight: "bold", color: p.profit >= 0 ? "#4ade80" : "#f87171" }}>
+                    </div>
+
+                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                      {soldSummary.rows.map((p) => (
+                        <div key={p.id} style={{
+                          background: "rgba(255,255,255,0.03)",
+                          border: `1px solid ${p.profit >= 0 ? "rgba(74,222,128,0.15)" : "rgba(248,113,113,0.15)"}`,
+                          borderRadius: 10, padding: 12,
+                        }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 6, marginBottom: 4 }}>
+                                <span style={{ fontSize: 12, fontWeight: "bold", color: "#f1f5f9" }}>{p.goldType}</span>
+                                <span style={{
+                                  fontSize: 10, padding: "1px 6px", borderRadius: 4,
+                                  background: "rgba(74,222,128,0.1)", color: "#4ade80", fontWeight: 600,
+                                }}>
+                                  ✅ Bán {p.sellDate ? new Date(p.sellDate).toLocaleDateString("vi-VN") : "N/A"}
+                                </span>
+                              </div>
+                              <div style={{ fontSize: 12, color: "#94a3b8" }}>
+                                <span style={{ color: "#e2e8f0", fontWeight: 600 }}>{p.quantity} chỉ</span>
+                              </div>
+                              <div style={{ fontSize: 11, color: "#475569", marginTop: 3, display: "flex", flexDirection: "column", gap: 2 }}>
+                                <span>Giá mua: <span style={{ color: "#94a3b8" }}>{p.purchasePrice.toLocaleString("vi-VN")}₫/chỉ</span></span>
+                                <span>Giá bán: <span style={{ color: "#fbbf24" }}>{(p.sellPrice || 0).toLocaleString("vi-VN")}₫/chỉ</span></span>
+                                <span>Vốn: {p.investment.toLocaleString("vi-VN")}₫ → Thu: {p.revenue.toLocaleString("vi-VN")}₫</span>
+                              </div>
+                            </div>
+                            <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4, marginLeft: 10, flexShrink: 0 }}>
+                              <div style={{ fontSize: 14, fontWeight: "bold", color: p.profit >= 0 ? "#4ade80" : "#f87171" }}>
                                 {p.profit >= 0 ? "+" : ""}{p.profit.toLocaleString("vi-VN")}₫
                               </div>
                               <div style={{ fontSize: 10, color: "#64748b" }}>{p.profit >= 0 ? "📈 Lãi" : "📉 Lỗ"}</div>
-                            </>
-                          ) : (
-                            <div style={{ fontSize: 11, color: "#334155", fontStyle: "italic" }}>Chưa có giá</div>
-                          )}
+                              <button
+                                onClick={() => handleDelete(p.id)}
+                                style={{ background: "none", border: "none", color: "#ef4444", cursor: "pointer", fontSize: 15, padding: 2, marginTop: 4 }}
+                                title="Xóa"
+                              >🗑️</button>
+                            </div>
+                          </div>
                         </div>
-                        <button
-                          onClick={() => handleDelete(p.id)}
-                          style={{ background: "none", border: "none", color: "#ef4444", cursor: "pointer", fontSize: 16, padding: 4 }}
-                          title="Xóa"
-                        >🗑️</button>
-                      </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
+                  </>
+                )}
               </>
             )}
           </div>
 
-          {/* ── FORM THÊM GIAO DỊCH ── */}
+          {/* Form thêm giao dịch */}
           <div style={s.formCard}>
             <h3 style={{ fontSize: 15, fontWeight: "bold", color: "#fbbf24", margin: "0 0 16px" }}>
               ➕ Thêm Vàng Đã Mua
@@ -402,8 +566,6 @@ const GoldPriceScreen: React.FC<GoldPriceProps> = ({ user }) => {
               </button>
             </form>
           </div>
-
-          
         </div>
       </div>
     </div>

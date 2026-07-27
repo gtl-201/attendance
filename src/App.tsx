@@ -14,6 +14,8 @@ import ClassList from './screen/classroom/ClassListScreen';
 import StudentList from './screen/classroom/studentList';
 import Attendance from './screen/classroom/a';
 import GoldPrice from './screen/classroom/goldPrices';
+import MergePDF from './screen/classroom/mergePDF';
+
 
 // Interface definitions
 interface AttendanceRecord {
@@ -179,6 +181,7 @@ export default function App(): JSX.Element {
                 <Link to="/attendance" onClick={closeMenu}>Điểm Danh</Link>
                 <Link to="/classList" onClick={closeMenu}>Quản Lý Lớp</Link>
                 <Link to="/gold" onClick={closeMenu}>Giá Vàng</Link>
+                <Link to="/merge" onClick={closeMenu}>Merge PDF</Link>
                 <button onClick={() => { handleLogout(); closeMenu(); }} className="logout-btn">
                   Đăng xuất
                 </button>
@@ -266,6 +269,15 @@ export default function App(): JSX.Element {
                 element={
                   <ProtectedRoute>
                     <GoldPrice user={user} />
+                  </ProtectedRoute>
+                }
+              />
+
+              <Route
+                path="/merge"
+                element={
+                  <ProtectedRoute>
+                    <MergePDF user={user} />
                   </ProtectedRoute>
                 }
               />

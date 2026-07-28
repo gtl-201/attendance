@@ -88,6 +88,10 @@ const StudentList: React.FC<StudentListProps> = ({ user }) => {
     const [todayAttendance, setTodayAttendance] = useState<AttendanceData[]>([]);
     const [makeupFees, setMakeupFees] = useState<{ [key: string]: number }>({});
 
+    // State điều khiển đóng mở danh sách ngưng học
+    const [showInactive, setShowInactive] = useState(false);
+    const [showInactiveByClass, setShowInactiveByClass] = useState<{ [classId: string]: boolean }>({});
+
     // Thêm state cho allClasses và studentsByClass
     const [allClasses, setAllClasses] = useState<ClassData[]>([]);
     const [studentsByClass, setStudentsByClass] = useState<{ [classId: string]: StudentData[] }>({});
@@ -562,87 +566,107 @@ const StudentList: React.FC<StudentListProps> = ({ user }) => {
                                 {(studentsByClass[cls.id] || []).length === 0 ? (
                                     <div className="text-gray-400 italic">Không có học sinh nào trong lớp này.</div>
                                 ) : (
-                                    studentsByClass[cls.id].map((student, index) => (
-                                        <div
-                                            key={student.id}
-                                            className={`bg-white rounded-lg shadow-md p-4 border-l-4 transition-all hover:shadow-lg ${student.status === 'active' ? 'border-green-500' : 'border-red-500'
-                                                }`}
-                                        >
-                                            <div className="flex items-center gap-4">
-                                                {/* Form chỉnh sửa hoặc hiển thị thông tin */}
-                                                {editingStudent === student.id ? (
-                                                    <div className="space-y-2">
-                                                        <input
-                                                            type="text"
-                                                            value={editStudentName}
-                                                            onChange={(e) => setEditStudentName(e.target.value)}
-                                                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                                            placeholder="Tên học sinh"
-                                                        />
-                                                        <input
-                                                            type="text"
-                                                            value={editStudentPhone}
-                                                            onChange={(e) => setEditStudentPhone(e.target.value)}
-                                                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                                            placeholder="Số điện thoại"
-                                                        />
-                                                        <div className="flex gap-2">
-                                                            <button
-                                                                onClick={() => saveEditStudent(student.id)}
-                                                                className="px-3 py-1 bg-green-600 text-white rounded-md hover:bg-green-700 text-sm"
-                                                            >
-                                                                Lưu
-                                                            </button>
-                                                            <button
-                                                                onClick={cancelEditStudent}
-                                                                className="px-3 py-1 bg-gray-400 text-white rounded-md hover:bg-gray-500 text-sm"
-                                                            >
-                                                                Hủy
-                                                            </button>
-                                                        </div>
-                                                    </div>
-                                                ) : (
-                                                    <div>
-                                                        <h3 className="text-lg font-semibold text-gray-800">
-                                                            {student.studentName}
-                                                        </h3>
-                                                        <p className="text-sm text-gray-600 mb-1">
-                                                            SĐT: {student.phoneNumber || 'Chưa có'}
-                                                        </p>
-                                                        <p className="text-xs text-blue-600">{classInfo?.className || ''}</p>
-                                                        <p className="text-xs text-gray-500">
-                                                            Ngày tham gia: {formatDate(student.enrolledAt)}
-                                                        </p>
-                                                    </div>
-                                                )}
-                                                {/* Nút thao tác */}
-                                                <div className="flex gap-2 mt-3">
-                                                    <button
-                                                        onClick={() => startEditStudent(student)}
-                                                        className="w-full border-blue-200 border px-2 py-2 text-xs rounded-md font-medium bg-blue-100 text-blue-800 hover:bg-blue-200"
+                                    (() => {
+                                        const classStudents = studentsByClass[cls.id] || [];
+                                        const sortedStudents = [...classStudents].sort((a, b) => (a.status === 'active' ? -1 : 1) - (b.status === 'active' ? -1 : 1));
+                                        const inactiveCount = classStudents.filter(s => s.status !== 'active').length;
+
+                                        return sortedStudents.map((student, index) => {
+                                            const isFirstInactive = student.status !== 'active' && (index === 0 || sortedStudents[index - 1].status === 'active');
+                                            const isHidden = student.status !== 'active' && !showInactiveByClass[cls.id];
+
+                                            return (
+                                                <React.Fragment key={student.id}>
+                                                    {isFirstInactive && (
+                                                        <button
+                                                            onClick={() => setShowInactiveByClass(prev => ({ ...prev, [cls.id]: !prev[cls.id] }))}
+                                                            className="col-span-full flex items-center justify-center gap-2 w-full py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-colors font-medium border border-gray-200 border-dashed mt-2 mb-2"
+                                                        >
+                                                            <span>{showInactiveByClass[cls.id] ? '▲ Thu gọn' : '▼ Xem danh sách'}</span>
+                                                            <span>Học sinh ngưng học ({inactiveCount})</span>
+                                                        </button>
+                                                    )}
+                                                    <div
+                                                        className={`bg-white rounded-lg shadow-md p-4 border-l-4 transition-all hover:shadow-lg ${student.status === 'active' ? 'border-green-500' : 'border-red-500'} ${isHidden ? 'hidden' : 'block'}`}
                                                     >
-                                                        Sửa
-                                                    </button>
-                                                    <button
-                                                        onClick={() => toggleStudentStatus(student, cls.id)}
-                                                        className={`px-3 py-1 text-xs rounded-md font-medium border transition-colors ${student.status === 'active'
-                                                            ? 'bg-green-50 text-green-700 border-green-200 hover:bg-green-100'
-                                                            : 'bg-yellow-50 text-yellow-700 border-yellow-200 hover:bg-yellow-100'
-                                                            }`}
-                                                    >
-                                                        {student.status === 'active' ? 'Đang học' : 'Ngưng học'}
-                                                    </button>
-                                                    {/* <button
+                                                        <div className="flex items-center gap-4">
+                                                            {/* Form chỉnh sửa hoặc hiển thị thông tin */}
+                                                            {editingStudent === student.id ? (
+                                                                <div className="space-y-2">
+                                                                    <input
+                                                                        type="text"
+                                                                        value={editStudentName}
+                                                                        onChange={(e) => setEditStudentName(e.target.value)}
+                                                                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                                        placeholder="Tên học sinh"
+                                                                    />
+                                                                    <input
+                                                                        type="text"
+                                                                        value={editStudentPhone}
+                                                                        onChange={(e) => setEditStudentPhone(e.target.value)}
+                                                                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                                        placeholder="Số điện thoại"
+                                                                    />
+                                                                    <div className="flex gap-2">
+                                                                        <button
+                                                                            onClick={() => saveEditStudent(student.id)}
+                                                                            className="px-3 py-1 bg-green-600 text-white rounded-md hover:bg-green-700 text-sm"
+                                                                        >
+                                                                            Lưu
+                                                                        </button>
+                                                                        <button
+                                                                            onClick={cancelEditStudent}
+                                                                            className="px-3 py-1 bg-gray-400 text-white rounded-md hover:bg-gray-500 text-sm"
+                                                                        >
+                                                                            Hủy
+                                                                        </button>
+                                                                    </div>
+                                                                </div>
+                                                            ) : (
+                                                                <div>
+                                                                    <h3 className="text-lg font-semibold text-gray-800">
+                                                                        {student.studentName}
+                                                                    </h3>
+                                                                    <p className="text-sm text-gray-600 mb-1">
+                                                                        SĐT: {student.phoneNumber || 'Chưa có'}
+                                                                    </p>
+                                                                    <p className="text-xs text-blue-600">{classInfo?.className || ''}</p>
+                                                                    <p className="text-xs text-gray-500">
+                                                                        Ngày tham gia: {formatDate(student.enrolledAt)}
+                                                                    </p>
+                                                                </div>
+                                                            )}
+                                                            {/* Nút thao tác */}
+                                                            <div className="flex gap-2 mt-3">
+                                                                <button
+                                                                    onClick={() => startEditStudent(student)}
+                                                                    className="w-full border-blue-200 border px-2 py-2 text-xs rounded-md font-medium bg-blue-100 text-blue-800 hover:bg-blue-200"
+                                                                >
+                                                                    Sửa
+                                                                </button>
+                                                                <button
+                                                                    onClick={() => toggleStudentStatus(student, cls.id)}
+                                                                    className={`px-3 py-1 text-xs rounded-md font-medium border transition-colors ${student.status === 'active'
+                                                                        ? 'bg-green-50 text-green-700 border-green-200 hover:bg-green-100'
+                                                                        : 'bg-yellow-50 text-yellow-700 border-yellow-200 hover:bg-yellow-100'
+                                                                        }`}
+                                                                >
+                                                                    {student.status === 'active' ? 'Đang học' : 'Ngưng học'}
+                                                                </button>
+                                                                {/* <button
                                                         onClick={() => removeStudent(student.id, student.studentName, cls.id)}
                                                         className="px-3 py-1 text-xs rounded-md font-medium bg-red-100 text-red-800 hover:bg-red-200"
                                                     >
                                                         Xóa
                                                     </button> */}
-                                                </div>
-                                            </div>
+                                                            </div>
+                                                        </div>
 
-                                        </div>
-                                    ))
+                                                    </div>
+                                                </React.Fragment>
+                                            );
+                                        })
+                                    })()
                                 )}
                             </div>
                         </div>
@@ -945,362 +969,381 @@ const StudentList: React.FC<StudentListProps> = ({ user }) => {
                 </div>
             ) : (
                 <div className="grid gap-4">
-                    {filteredStudents.map((student, index) => (
-                        <div
-                            key={student.id}
-                            className={`bg-white rounded-lg shadow-md p-4 border-l-4 transition-all hover:shadow-lg ${student.status === 'active' ? 'border-green-500' : 'border-red-500'
-                                }`}
-                        >
-                            {/* Mobile Layout: Stack vertically */}
-                            <div className="lg:hidden">
-                                {/* Student Info Section - Top */}
-                                <div className="mb-4">
-                                    <div className="flex items-start gap-3 mb-3">
-                                        {/* Form chỉnh sửa hoặc hiển thị thông tin */}
-                                        {editingStudent === student.id ? (
-                                            <div className="space-y-2">
-                                                <input
-                                                    type="text"
-                                                    value={editStudentName}
-                                                    onChange={(e) => setEditStudentName(e.target.value)}
-                                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                                    placeholder="Tên học sinh"
-                                                />
-                                                <input
-                                                    type="text"
-                                                    value={editStudentPhone}
-                                                    onChange={(e) => setEditStudentPhone(e.target.value)}
-                                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                                    placeholder="Số điện thoại"
-                                                />
-                                                <div className="flex gap-2">
-                                                    <button
-                                                        onClick={() => saveEditStudent(student.id)}
-                                                        className="px-3 py-1 bg-green-600 text-white rounded-md hover:bg-green-700 text-sm"
-                                                    >
-                                                        Lưu
-                                                    </button>
-                                                    <button
-                                                        onClick={cancelEditStudent}
-                                                        className="px-3 py-1 bg-gray-400 text-white rounded-md hover:bg-gray-500 text-sm"
-                                                    >
-                                                        Hủy
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        ) : (
-                                            <div>
-                                                <h3 className="text-lg font-semibold text-gray-800">
-                                                    {student.studentName}
-                                                </h3>
-                                                <p className="text-sm text-gray-600 mb-1">
-                                                    SĐT: {student.phoneNumber || 'Chưa có'}
-                                                </p>
-                                                <p className="text-xs text-blue-600">{classInfo?.className || ''}</p>
-                                                <p className="text-xs text-gray-500">
-                                                    Ngày tham gia: {formatDate(student.enrolledAt)}
-                                                </p>
-                                            </div>
-                                        )}
-                                        {/* Status Badge */}
-                                        {showAttendance && attendanceData[student.id] && (
-                                            <div className="ml-2">
-                                                <span className={`px-2 py-1 rounded-full text-xs font-medium ${attendanceData[student.id] === 'present' ? 'bg-green-500 text-white' :
-                                                    attendanceData[student.id] === 'late' ? 'bg-yellow-500 text-white' :
-                                                        attendanceData[student.id] === 'absent' ? 'bg-red-500 text-white' :
-                                                            attendanceData[student.id] === 'excused' ? 'bg-blue-500 text-white' :
-                                                                attendanceData[student.id] === 'makeup' ? 'bg-purple-500 text-white' :
-                                                                    'bg-gray-300 text-gray-700'
-                                                    }`}>
-                                                    {attendanceData[student.id] === 'present' ? '✅' :
-                                                        attendanceData[student.id] === 'late' ? '⏰' :
-                                                            attendanceData[student.id] === 'absent' ? '❌' :
-                                                                attendanceData[student.id] === 'excused' ? '📝' :
-                                                                    attendanceData[student.id] === 'makeup' ? '🔄' : '⚪'}
-                                                </span>
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
+                    {(() => {
+                        const sortedFilteredStudents = [...filteredStudents].sort((a, b) => (a.status === 'active' ? -1 : 1) - (b.status === 'active' ? -1 : 1));
+                        const inactiveCount = filteredStudents.filter(s => s.status !== 'active').length;
 
-                                {/* Controls Section - Bottom */}
-                                {showAttendance && classInfo && user && user.uid === classInfo.teacherId && (
-                                    <div className="space-y-3">
-                                        {/* Primary attendance buttons */}
-                                        <div className="grid grid-cols-2 gap-2">
-                                            <button
-                                                onClick={() => updateAttendanceStatus(student.id, 'present')}
-                                                className={`p-3 text-sm rounded-lg font-medium transition-all ${attendanceData[student.id] === 'present'
-                                                    ? 'bg-green-500 text-white shadow-md'
-                                                    : ' text-green-700 hover:bg-green-100 border border-green-200'
-                                                    }`}
-                                            >
-                                                ✅ Có mặt
-                                            </button>
-                                            <button
-                                                onClick={() => updateAttendanceStatus(student.id, 'absent')}
-                                                className={`p-3 text-sm rounded-lg font-medium transition-all ${attendanceData[student.id] === 'absent'
-                                                    ? 'bg-red-500 text-white shadow-md'
-                                                    : ' text-red-700 hover:bg-red-100 border border-red-200'
-                                                    }`}
-                                            >
-                                                ❌ Vắng
-                                            </button>
-                                        </div>
+                        return sortedFilteredStudents.map((student, index) => {
+                            const isFirstInactive = student.status !== 'active' && (index === 0 || sortedFilteredStudents[index - 1].status === 'active');
+                            const isHidden = student.status !== 'active' && !showInactive;
 
-                                        {/* Secondary attendance buttons */}
-                                        <div className="grid grid-cols-3 gap-2">
-                                            <button
-                                                onClick={() => updateAttendanceStatus(student.id, 'late')}
-                                                className={`p-2 text-xs rounded-lg font-medium transition-all ${attendanceData[student.id] === 'late'
-                                                    ? 'bg-yellow-500 text-white shadow-md'
-                                                    : ' text-yellow-700 hover:bg-yellow-100 border border-yellow-200'
-                                                    }`}
-                                            >
-                                                ⏰ Muộn
-                                            </button>
-                                            <button
-                                                onClick={() => updateAttendanceStatus(student.id, 'excused')}
-                                                className={`p-2 text-xs rounded-lg font-medium transition-all ${attendanceData[student.id] === 'excused'
-                                                    ? 'bg-blue-500 text-white shadow-md'
-                                                    : ' text-blue-700 hover:bg-blue-100 border border-blue-200'
-                                                    }`}
-                                            >
-                                                📝 Xin nghỉ
-                                            </button>
-                                            <button
-                                                onClick={() => updateAttendanceStatus(student.id, 'makeup')}
-                                                className={`p-2 text-xs rounded-lg font-medium transition-all ${attendanceData[student.id] === 'makeup'
-                                                    ? 'bg-purple-500 text-white shadow-md'
-                                                    : ' text-purple-700 hover:bg-purple-100 border border-purple-200'
-                                                    }`}
-                                            >
-                                                🔄 Bổ sung
-                                            </button>
-                                        </div>
-
-                                        {/* Makeup fee input - conditional */}
-                                        {attendanceData[student.id] === 'makeup' && (
-                                            <div className="bg-purple-50 p-3 rounded-lg border border-purple-200">
-                                                <label className="block text-xs font-medium text-purple-700 mb-2">
-                                                    Phí bổ sung (VNĐ)
-                                                </label>
-                                                <input
-                                                    type="number"
-                                                    placeholder="Nhập phí bổ sung..."
-                                                    value={makeupFees[student.id] || ''}
-                                                    onChange={(e) => updateMakeupFee(student.id, Number(e.target.value))}
-                                                    className="w-full px-3 py-2 text-sm border border-purple-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
-                                                    min="0"
-                                                    step="1000"
-                                                />
-                                            </div>
-                                        )}
-
-                                        {/* Notes input */}
-                                        <div>
-                                            <textarea
-                                                placeholder="Ghi chú..."
-                                                value={attendanceNotes[student.id] || ''}
-                                                onChange={(e) => updateAttendanceNote(student.id, e.target.value)}
-                                                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"
-                                                rows={2}
-                                            />
-                                        </div>
-                                    </div>
-                                )}
-
-                                {/* Remove button for non-attendance mode */}
-                                {!showAttendance && classInfo && user && user.uid === classInfo.teacherId && (
-                                    <div className="mt-3 pt-3 border-t border-gray-200 text-end">
+                            return (
+                                <React.Fragment key={student.id}>
+                                    {isFirstInactive && (
                                         <button
-                                            onClick={() => removeStudent(student.id, student.studentName)}
-                                            className="px-4 py-2 mt-2 mb-2 text-sm rounded-lg font-medium bg-red-50 text-red-700 hover:bg-red-100 border border-red-200 transition-colors"
+                                            onClick={() => setShowInactive(!showInactive)}
+                                            className="col-span-full flex items-center justify-center gap-2 w-full py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-colors font-medium border border-gray-200 border-dashed mt-2"
                                         >
-                                            🗑️ Xóa học sinh
+                                            <span>{showInactive ? '▲ Thu gọn' : '▼ Xem danh sách'}</span>
+                                            <span>Học sinh ngưng học ({inactiveCount})</span>
                                         </button>
-                                        <button
-                                            onClick={() => startEditStudent(student)}
-                                            className="w-full border-blue-200 border px-2 py-2 text-xs rounded-md font-medium bg-blue-100 text-blue-800 hover:bg-blue-200"
-                                        >
-                                            Sửa
-                                        </button>
-                                        <button
-                                            onClick={() => toggleStudentStatus(student)}
-                                            className={`w-full mt-2 px-4 py-2 text-sm rounded-lg font-medium border transition-colors ${student.status === 'active'
-                                                ? 'bg-green-50 text-green-700 border-green-200 hover:bg-green-100'
-                                                : 'bg-yellow-50 text-yellow-700 border-yellow-200 hover:bg-yellow-100'
-                                                }`}
-                                        >
-                                            {student.status === 'active' ? 'Đang học' : 'Ngưng học'}
-                                        </button>
-
-
-                                    </div>
-                                )}
-                            </div>
-
-                            {/* Desktop Layout: Horizontal */}
-                            <div className="hidden lg:flex justify-between items-center">
-                                <div className="flex-1">
-                                    <div className="flex items-center gap-4">
-                                        {/* Form chỉnh sửa hoặc hiển thị thông tin */}
-                                        {editingStudent === student.id ? (
-                                            <div className="space-y-2">
-                                                <input
-                                                    type="text"
-                                                    value={editStudentName}
-                                                    onChange={(e) => setEditStudentName(e.target.value)}
-                                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                                    placeholder="Tên học sinh"
-                                                />
-                                                <input
-                                                    type="text"
-                                                    value={editStudentPhone}
-                                                    onChange={(e) => setEditStudentPhone(e.target.value)}
-                                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                                    placeholder="Số điện thoại"
-                                                />
-                                                <div className="flex gap-2">
-                                                    <button
-                                                        onClick={() => saveEditStudent(student.id)}
-                                                        className="px-3 py-1 bg-green-600 text-white rounded-md hover:bg-green-700 text-sm"
-                                                    >
-                                                        Lưu
-                                                    </button>
-                                                    <button
-                                                        onClick={cancelEditStudent}
-                                                        className="px-3 py-1 bg-gray-400 text-white rounded-md hover:bg-gray-500 text-sm"
-                                                    >
-                                                        Hủy
-                                                    </button>
+                                    )}
+                                    <div
+                                        className={`bg-white rounded-lg shadow-md p-4 border-l-4 transition-all hover:shadow-lg ${student.status === 'active' ? 'border-green-500' : 'border-red-500'} ${isHidden ? 'hidden' : 'block'}`}
+                                    >
+                                        {/* Mobile Layout: Stack vertically */}
+                                        <div className="lg:hidden">
+                                            {/* Student Info Section - Top */}
+                                            <div className="mb-4">
+                                                <div className="flex items-start gap-3 mb-3">
+                                                    {/* Form chỉnh sửa hoặc hiển thị thông tin */}
+                                                    {editingStudent === student.id ? (
+                                                        <div className="space-y-2">
+                                                            <input
+                                                                type="text"
+                                                                value={editStudentName}
+                                                                onChange={(e) => setEditStudentName(e.target.value)}
+                                                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                                placeholder="Tên học sinh"
+                                                            />
+                                                            <input
+                                                                type="text"
+                                                                value={editStudentPhone}
+                                                                onChange={(e) => setEditStudentPhone(e.target.value)}
+                                                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                                placeholder="Số điện thoại"
+                                                            />
+                                                            <div className="flex gap-2">
+                                                                <button
+                                                                    onClick={() => saveEditStudent(student.id)}
+                                                                    className="px-3 py-1 bg-green-600 text-white rounded-md hover:bg-green-700 text-sm"
+                                                                >
+                                                                    Lưu
+                                                                </button>
+                                                                <button
+                                                                    onClick={cancelEditStudent}
+                                                                    className="px-3 py-1 bg-gray-400 text-white rounded-md hover:bg-gray-500 text-sm"
+                                                                >
+                                                                    Hủy
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    ) : (
+                                                        <div>
+                                                            <h3 className="text-lg font-semibold text-gray-800">
+                                                                {student.studentName}
+                                                            </h3>
+                                                            <p className="text-sm text-gray-600 mb-1">
+                                                                SĐT: {student.phoneNumber || 'Chưa có'}
+                                                            </p>
+                                                            <p className="text-xs text-blue-600">{classInfo?.className || ''}</p>
+                                                            <p className="text-xs text-gray-500">
+                                                                Ngày tham gia: {formatDate(student.enrolledAt)}
+                                                            </p>
+                                                        </div>
+                                                    )}
+                                                    {/* Status Badge */}
+                                                    {showAttendance && attendanceData[student.id] && (
+                                                        <div className="ml-2">
+                                                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${attendanceData[student.id] === 'present' ? 'bg-green-500 text-white' :
+                                                                attendanceData[student.id] === 'late' ? 'bg-yellow-500 text-white' :
+                                                                    attendanceData[student.id] === 'absent' ? 'bg-red-500 text-white' :
+                                                                        attendanceData[student.id] === 'excused' ? 'bg-blue-500 text-white' :
+                                                                            attendanceData[student.id] === 'makeup' ? 'bg-purple-500 text-white' :
+                                                                                'bg-gray-300 text-gray-700'
+                                                                }`}>
+                                                                {attendanceData[student.id] === 'present' ? '✅' :
+                                                                    attendanceData[student.id] === 'late' ? '⏰' :
+                                                                        attendanceData[student.id] === 'absent' ? '❌' :
+                                                                            attendanceData[student.id] === 'excused' ? '📝' :
+                                                                                attendanceData[student.id] === 'makeup' ? '🔄' : '⚪'}
+                                                            </span>
+                                                        </div>
+                                                    )}
                                                 </div>
                                             </div>
-                                        ) : (
-                                            <div>
-                                                <h3 className="text-lg font-semibold text-gray-800">
-                                                    {student.studentName}
-                                                </h3>
-                                                <p className="text-sm text-gray-600 mb-1">
-                                                    SĐT: {student.phoneNumber || 'Chưa có'}
-                                                </p>
-                                                <p className="text-xs text-blue-600">{classInfo?.className || ''}</p>
-                                                <p className="text-xs text-gray-500">
-                                                    Ngày tham gia: {formatDate(student.enrolledAt)}
-                                                </p>
-                                            </div>
-                                        )}
 
-                                        {/* Desktop Attendance controls */}
-                                        {showAttendance && classInfo && user && user.uid === classInfo.teacherId && (
-                                            <div className="flex flex-col gap-2 min-w-96">
-                                                <div className="grid grid-cols-3 gap-2">
-                                                    <button
-                                                        onClick={() => updateAttendanceStatus(student.id, 'present')}
-                                                        className={`px-3 py-1 text-xs rounded-md font-medium transition-all ${attendanceData[student.id] === 'present'
-                                                            ? 'bg-green-500 text-white shadow-md'
-                                                            : 'border border-green-300 text-green-800 hover:bg-green-200'
-                                                            }`}
-                                                    >
-                                                        ✅ Có mặt
-                                                    </button>
-                                                    <button
-                                                        onClick={() => updateAttendanceStatus(student.id, 'late')}
-                                                        className={`px-3 py-1 text-xs rounded-md font-medium transition-all ${attendanceData[student.id] === 'late'
-                                                            ? 'bg-yellow-500 text-white shadow-md'
-                                                            : 'border border-yellow-300 text-yellow-800 hover:bg-yellow-200'
-                                                            }`}
-                                                    >
-                                                        ⏰ Muộn
-                                                    </button>
-                                                    <button
-                                                        onClick={() => updateAttendanceStatus(student.id, 'absent')}
-                                                        className={`px-3 py-1 text-xs rounded-md font-medium transition-all ${attendanceData[student.id] === 'absent'
-                                                            ? 'bg-red-500 text-white shadow-md'
-                                                            : 'border border-red-300 text-red-800 hover:bg-red-200'
-                                                            }`}
-                                                    >
-                                                        ❌ Vắng
-                                                    </button>
+                                            {/* Controls Section - Bottom */}
+                                            {showAttendance && classInfo && user && user.uid === classInfo.teacherId && (
+                                                <div className="space-y-3">
+                                                    {/* Primary attendance buttons */}
+                                                    <div className="grid grid-cols-2 gap-2">
+                                                        <button
+                                                            onClick={() => updateAttendanceStatus(student.id, 'present')}
+                                                            className={`p-3 text-sm rounded-lg font-medium transition-all ${attendanceData[student.id] === 'present'
+                                                                ? 'bg-green-500 text-white shadow-md'
+                                                                : ' text-green-700 hover:bg-green-100 border border-green-200'
+                                                                }`}
+                                                        >
+                                                            ✅ Có mặt
+                                                        </button>
+                                                        <button
+                                                            onClick={() => updateAttendanceStatus(student.id, 'absent')}
+                                                            className={`p-3 text-sm rounded-lg font-medium transition-all ${attendanceData[student.id] === 'absent'
+                                                                ? 'bg-red-500 text-white shadow-md'
+                                                                : ' text-red-700 hover:bg-red-100 border border-red-200'
+                                                                }`}
+                                                        >
+                                                            ❌ Vắng
+                                                        </button>
+                                                    </div>
+
+                                                    {/* Secondary attendance buttons */}
+                                                    <div className="grid grid-cols-3 gap-2">
+                                                        <button
+                                                            onClick={() => updateAttendanceStatus(student.id, 'late')}
+                                                            className={`p-2 text-xs rounded-lg font-medium transition-all ${attendanceData[student.id] === 'late'
+                                                                ? 'bg-yellow-500 text-white shadow-md'
+                                                                : ' text-yellow-700 hover:bg-yellow-100 border border-yellow-200'
+                                                                }`}
+                                                        >
+                                                            ⏰ Muộn
+                                                        </button>
+                                                        <button
+                                                            onClick={() => updateAttendanceStatus(student.id, 'excused')}
+                                                            className={`p-2 text-xs rounded-lg font-medium transition-all ${attendanceData[student.id] === 'excused'
+                                                                ? 'bg-blue-500 text-white shadow-md'
+                                                                : ' text-blue-700 hover:bg-blue-100 border border-blue-200'
+                                                                }`}
+                                                        >
+                                                            📝 Xin nghỉ
+                                                        </button>
+                                                        <button
+                                                            onClick={() => updateAttendanceStatus(student.id, 'makeup')}
+                                                            className={`p-2 text-xs rounded-lg font-medium transition-all ${attendanceData[student.id] === 'makeup'
+                                                                ? 'bg-purple-500 text-white shadow-md'
+                                                                : ' text-purple-700 hover:bg-purple-100 border border-purple-200'
+                                                                }`}
+                                                        >
+                                                            🔄 Bổ sung
+                                                        </button>
+                                                    </div>
+
+                                                    {/* Makeup fee input - conditional */}
+                                                    {attendanceData[student.id] === 'makeup' && (
+                                                        <div className="bg-purple-50 p-3 rounded-lg border border-purple-200">
+                                                            <label className="block text-xs font-medium text-purple-700 mb-2">
+                                                                Phí bổ sung (VNĐ)
+                                                            </label>
+                                                            <input
+                                                                type="number"
+                                                                placeholder="Nhập phí bổ sung..."
+                                                                value={makeupFees[student.id] || ''}
+                                                                onChange={(e) => updateMakeupFee(student.id, Number(e.target.value))}
+                                                                className="w-full px-3 py-2 text-sm border border-purple-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                                                                min="0"
+                                                                step="1000"
+                                                            />
+                                                        </div>
+                                                    )}
+
+                                                    {/* Notes input */}
+                                                    <div>
+                                                        <textarea
+                                                            placeholder="Ghi chú..."
+                                                            value={attendanceNotes[student.id] || ''}
+                                                            onChange={(e) => updateAttendanceNote(student.id, e.target.value)}
+                                                            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"
+                                                            rows={2}
+                                                        />
+                                                    </div>
                                                 </div>
-                                                <div className="grid grid-cols-2 gap-2">
+                                            )}
+
+                                            {/* Remove button for non-attendance mode */}
+                                            {!showAttendance && classInfo && user && user.uid === classInfo.teacherId && (
+                                                <div className="mt-3 pt-3 border-t border-gray-200 text-end">
                                                     <button
-                                                        onClick={() => updateAttendanceStatus(student.id, 'excused')}
-                                                        className={`px-3 py-1 text-xs rounded-md font-medium transition-all ${attendanceData[student.id] === 'excused'
-                                                            ? 'bg-blue-500 text-white shadow-md'
-                                                            : 'border border-blue-300 text-blue-800 hover:bg-blue-200'
-                                                            }`}
+                                                        onClick={() => removeStudent(student.id, student.studentName)}
+                                                        className="px-4 py-2 mt-2 mb-2 text-sm rounded-lg font-medium bg-red-50 text-red-700 hover:bg-red-100 border border-red-200 transition-colors"
                                                     >
-                                                        📝 Xin nghỉ
+                                                        🗑️ Xóa học sinh
                                                     </button>
                                                     <button
-                                                        onClick={() => updateAttendanceStatus(student.id, 'makeup')}
-                                                        className={`px-3 py-1 text-xs rounded-md font-medium transition-all ${attendanceData[student.id] === 'makeup'
-                                                            ? 'bg-purple-500 text-white shadow-md'
-                                                            : 'border border-purple-300 text-purple-800 hover:bg-purple-200'
+                                                        onClick={() => startEditStudent(student)}
+                                                        className="w-full border-blue-200 border px-2 py-2 text-xs rounded-md font-medium bg-blue-100 text-blue-800 hover:bg-blue-200"
+                                                    >
+                                                        Sửa
+                                                    </button>
+                                                    <button
+                                                        onClick={() => toggleStudentStatus(student)}
+                                                        className={`w-full mt-2 px-4 py-2 text-sm rounded-lg font-medium border transition-colors ${student.status === 'active'
+                                                            ? 'bg-green-50 text-green-700 border-green-200 hover:bg-green-100'
+                                                            : 'bg-yellow-50 text-yellow-700 border-yellow-200 hover:bg-yellow-100'
                                                             }`}
                                                     >
-                                                        🔄 Bổ sung
+                                                        {student.status === 'active' ? 'Đang học' : 'Ngưng học'}
                                                     </button>
+
+
                                                 </div>
+                                            )}
+                                        </div>
 
-                                                {/* Desktop Makeup fee input */}
-                                                {attendanceData[student.id] === 'makeup' && (
-                                                    <input
-                                                        type="number"
-                                                        placeholder="Nhập phí bổ sung..."
-                                                        value={makeupFees[student.id] || ''}
-                                                        onChange={(e) => updateMakeupFee(student.id, Number(e.target.value))}
-                                                        className="px-2 py-1 text-xs border border-purple-300 rounded-md focus:outline-none focus:ring-1 focus:ring-purple-500"
-                                                        min="0"
-                                                        step="1000"
-                                                    />
-                                                )}
+                                        {/* Desktop Layout: Horizontal */}
+                                        <div className="hidden lg:flex justify-between items-center">
+                                            <div className="flex-1">
+                                                <div className="flex items-center gap-4">
+                                                    {/* Form chỉnh sửa hoặc hiển thị thông tin */}
+                                                    {editingStudent === student.id ? (
+                                                        <div className="space-y-2">
+                                                            <input
+                                                                type="text"
+                                                                value={editStudentName}
+                                                                onChange={(e) => setEditStudentName(e.target.value)}
+                                                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                                placeholder="Tên học sinh"
+                                                            />
+                                                            <input
+                                                                type="text"
+                                                                value={editStudentPhone}
+                                                                onChange={(e) => setEditStudentPhone(e.target.value)}
+                                                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                                placeholder="Số điện thoại"
+                                                            />
+                                                            <div className="flex gap-2">
+                                                                <button
+                                                                    onClick={() => saveEditStudent(student.id)}
+                                                                    className="px-3 py-1 bg-green-600 text-white rounded-md hover:bg-green-700 text-sm"
+                                                                >
+                                                                    Lưu
+                                                                </button>
+                                                                <button
+                                                                    onClick={cancelEditStudent}
+                                                                    className="px-3 py-1 bg-gray-400 text-white rounded-md hover:bg-gray-500 text-sm"
+                                                                >
+                                                                    Hủy
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    ) : (
+                                                        <div>
+                                                            <h3 className="text-lg font-semibold text-gray-800">
+                                                                {student.studentName}
+                                                            </h3>
+                                                            <p className="text-sm text-gray-600 mb-1">
+                                                                SĐT: {student.phoneNumber || 'Chưa có'}
+                                                            </p>
+                                                            <p className="text-xs text-blue-600">{classInfo?.className || ''}</p>
+                                                            <p className="text-xs text-gray-500">
+                                                                Ngày tham gia: {formatDate(student.enrolledAt)}
+                                                            </p>
+                                                        </div>
+                                                    )}
 
-                                                <input
-                                                    type="text"
-                                                    placeholder="Ghi chú..."
-                                                    value={attendanceNotes[student.id] || ''}
-                                                    onChange={(e) => updateAttendanceNote(student.id, e.target.value)}
-                                                    className="px-2 py-1 text-xs border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500"
-                                                />
+                                                    {/* Desktop Attendance controls */}
+                                                    {showAttendance && classInfo && user && user.uid === classInfo.teacherId && (
+                                                        <div className="flex flex-col gap-2 min-w-96">
+                                                            <div className="grid grid-cols-3 gap-2">
+                                                                <button
+                                                                    onClick={() => updateAttendanceStatus(student.id, 'present')}
+                                                                    className={`px-3 py-1 text-xs rounded-md font-medium transition-all ${attendanceData[student.id] === 'present'
+                                                                        ? 'bg-green-500 text-white shadow-md'
+                                                                        : 'border border-green-300 text-green-800 hover:bg-green-200'
+                                                                        }`}
+                                                                >
+                                                                    ✅ Có mặt
+                                                                </button>
+                                                                <button
+                                                                    onClick={() => updateAttendanceStatus(student.id, 'late')}
+                                                                    className={`px-3 py-1 text-xs rounded-md font-medium transition-all ${attendanceData[student.id] === 'late'
+                                                                        ? 'bg-yellow-500 text-white shadow-md'
+                                                                        : 'border border-yellow-300 text-yellow-800 hover:bg-yellow-200'
+                                                                        }`}
+                                                                >
+                                                                    ⏰ Muộn
+                                                                </button>
+                                                                <button
+                                                                    onClick={() => updateAttendanceStatus(student.id, 'absent')}
+                                                                    className={`px-3 py-1 text-xs rounded-md font-medium transition-all ${attendanceData[student.id] === 'absent'
+                                                                        ? 'bg-red-500 text-white shadow-md'
+                                                                        : 'border border-red-300 text-red-800 hover:bg-red-200'
+                                                                        }`}
+                                                                >
+                                                                    ❌ Vắng
+                                                                </button>
+                                                            </div>
+                                                            <div className="grid grid-cols-2 gap-2">
+                                                                <button
+                                                                    onClick={() => updateAttendanceStatus(student.id, 'excused')}
+                                                                    className={`px-3 py-1 text-xs rounded-md font-medium transition-all ${attendanceData[student.id] === 'excused'
+                                                                        ? 'bg-blue-500 text-white shadow-md'
+                                                                        : 'border border-blue-300 text-blue-800 hover:bg-blue-200'
+                                                                        }`}
+                                                                >
+                                                                    📝 Xin nghỉ
+                                                                </button>
+                                                                <button
+                                                                    onClick={() => updateAttendanceStatus(student.id, 'makeup')}
+                                                                    className={`px-3 py-1 text-xs rounded-md font-medium transition-all ${attendanceData[student.id] === 'makeup'
+                                                                        ? 'bg-purple-500 text-white shadow-md'
+                                                                        : 'border border-purple-300 text-purple-800 hover:bg-purple-200'
+                                                                        }`}
+                                                                >
+                                                                    🔄 Bổ sung
+                                                                </button>
+                                                            </div>
+
+                                                            {/* Desktop Makeup fee input */}
+                                                            {attendanceData[student.id] === 'makeup' && (
+                                                                <input
+                                                                    type="number"
+                                                                    placeholder="Nhập phí bổ sung..."
+                                                                    value={makeupFees[student.id] || ''}
+                                                                    onChange={(e) => updateMakeupFee(student.id, Number(e.target.value))}
+                                                                    className="px-2 py-1 text-xs border border-purple-300 rounded-md focus:outline-none focus:ring-1 focus:ring-purple-500"
+                                                                    min="0"
+                                                                    step="1000"
+                                                                />
+                                                            )}
+
+                                                            <input
+                                                                type="text"
+                                                                placeholder="Ghi chú..."
+                                                                value={attendanceNotes[student.id] || ''}
+                                                                onChange={(e) => updateAttendanceNote(student.id, e.target.value)}
+                                                                className="px-2 py-1 text-xs border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                                            />
+                                                        </div>
+                                                    )}
+                                                </div>
                                             </div>
-                                        )}
-                                    </div>
-                                </div>
 
-                                {/* Desktop Remove button */}
-                                {!showAttendance && classInfo && user && user.uid === classInfo.teacherId && (
-                                    <div className="flex items-center gap-3">
-                                        <div className="flex gap-2">
-                                            <button
-                                                onClick={() => startEditStudent(student)}
-                                                className="w-full border-blue-200 border px-2 py-2 text-xs rounded-md font-medium bg-blue-100 text-blue-800 hover:bg-blue-200"
-                                            >
-                                                Sửa
-                                            </button>
-                                            <button
-                                                onClick={() => toggleStudentStatus(student)}
-                                                className={`px-3 py-1 text-xs rounded-md font-medium border transition-colors ${student.status === 'active'
-                                                    ? 'bg-green-50 text-green-700 border-green-200 hover:bg-green-100'
-                                                    : 'bg-yellow-50 text-yellow-700 border-yellow-200 hover:bg-yellow-100'
-                                                    }`}
-                                            >
-                                                {student.status === 'active' ? 'Đang học' : 'Ngưng học'}
-                                            </button>
-                                            <button
-                                                onClick={() => removeStudent(student.id, student.studentName)}
-                                                className="px-3 py-1 text-xs rounded-md font-medium bg-red-100 text-red-800 hover:bg-red-200"
-                                            >
-                                                Xóa
-                                            </button>
+                                            {/* Desktop Remove button */}
+                                            {!showAttendance && classInfo && user && user.uid === classInfo.teacherId && (
+                                                <div className="flex items-center gap-3">
+                                                    <div className="flex gap-2">
+                                                        <button
+                                                            onClick={() => startEditStudent(student)}
+                                                            className="w-full border-blue-200 border px-2 py-2 text-xs rounded-md font-medium bg-blue-100 text-blue-800 hover:bg-blue-200"
+                                                        >
+                                                            Sửa
+                                                        </button>
+                                                        <button
+                                                            onClick={() => toggleStudentStatus(student)}
+                                                            className={`px-3 py-1 text-xs rounded-md font-medium border transition-colors ${student.status === 'active'
+                                                                ? 'bg-green-50 text-green-700 border-green-200 hover:bg-green-100'
+                                                                : 'bg-yellow-50 text-yellow-700 border-yellow-200 hover:bg-yellow-100'
+                                                                }`}
+                                                        >
+                                                            {student.status === 'active' ? 'Đang học' : 'Ngưng học'}
+                                                        </button>
+                                                        <button
+                                                            onClick={() => removeStudent(student.id, student.studentName)}
+                                                            className="px-3 py-1 text-xs rounded-md font-medium bg-red-100 text-red-800 hover:bg-red-200"
+                                                        >
+                                                            Xóa
+                                                        </button>
 
+                                                    </div>
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
-                                )}
-                            </div>
-                        </div>
-                    ))}
+                                </React.Fragment>
+                            );
+                        })
+                    })()}
                 </div>
             )}
         </div>

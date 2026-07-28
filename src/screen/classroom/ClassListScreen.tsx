@@ -46,6 +46,9 @@ const ClassList: React.FC<ClassListProps> = ({ user }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [error, setError] = useState<string>('');
 
+  // State điều khiển đóng mở danh sách lớp đã dừng
+  const [showInactiveClasses, setShowInactiveClasses] = useState(false);
+
   // New toast message system
   const [toastMessages, setToastMessages] = useState<ToastMessage[]>([]);
 
@@ -257,8 +260,8 @@ const ClassList: React.FC<ClassListProps> = ({ user }) => {
           <div
             key={message.id}
             className={`transform transition-all duration-300 ease-out p-4 rounded-lg shadow-lg border-l-4 ${message.type === 'success'
-                ? 'bg-white border-green-500 text-green-800'
-                : 'bg-white border-red-500 text-red-800'
+              ? 'bg-white border-green-500 text-green-800'
+              : 'bg-white border-red-500 text-red-800'
               }`}
             style={{
               animation: 'slideInRight 0.3s ease-out',
@@ -402,89 +405,110 @@ const ClassList: React.FC<ClassListProps> = ({ user }) => {
         </div>
       ) : (
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {filteredClasses.map((cls) => (
-            <div
-              key={cls.id}
-              className={`group bg-white rounded-2xl shadow-sm border border-slate-100 p-5 hover:shadow-xl hover:shadow-slate-200 transition-all duration-300 relative overflow-hidden ${!cls.isActive ? 'opacity-75' : ''
-                }`}
-            >
-              {/* Active Accent Bar */}
-              <div className={`absolute top-0 left-0 right-0 h-1.5 ${cls.isActive ? 'bg-indigo-500' : 'bg-slate-300'}`} />
+          {(() => {
+            const sortedClasses = [...filteredClasses].sort((a, b) => (a.isActive ? -1 : 1) - (b.isActive ? -1 : 1));
+            const inactiveCount = filteredClasses.filter(c => !c.isActive).length;
 
-              {/* Header */}
-              <div className="flex justify-between items-start mb-4">
-                <h3 className="text-lg font-bold text-slate-800 group-hover:text-indigo-600 transition-colors truncate pr-2">
-                  {cls.className}
-                </h3>
-                <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${cls.isActive
-                    ? 'bg-emerald-50 text-emerald-600 border border-emerald-100'
-                    : 'bg-slate-100 text-slate-500 border border-slate-200'
-                  }`}>
-                  {cls.isActive ? 'Hoạt động' : 'Tạm dừng'}
-                </span>
-              </div>
+            return sortedClasses.map((cls, index) => {
+              const isFirstInactive = !cls.isActive && (index === 0 || sortedClasses[index - 1].isActive);
+              const isHidden = !cls.isActive && !showInactiveClasses;
 
-              {/* Thông tin lớp học */}
-              <div className="space-y-2 mb-4">
-                <div className="flex items-center gap-2 text-sm text-slate-600">
-                  <span className="text-indigo-400">📚</span>
-                  <span>{cls.subject}</span>
-                </div>
-                <div className="flex items-center gap-2 text-sm text-slate-600">
-                  <span className="text-indigo-400">👥</span>
-                  <span>{cls.totalStudents} học sinh</span>
-                </div>
-                <div className="text-sm">
-                  <span className="text-emerald-600 font-bold text-base">
-                    {formatCurrency(cls.feePerSession)}/buổi
-                  </span><span className="text-slate-400 text-xs font-medium ml-1">/ buổi</span>
-                </div>
-                {cls.description && (
-                  <p className="text-xs text-slate-400 line-clamp-1 italic mt-1">
-                    {cls.description}
-                  </p>
-                )}
-              </div>
+              return (
+                <React.Fragment key={cls.id}>
+                  {isFirstInactive && (
+                    <div className="col-span-full mt-2 mb-2">
+                      <button
+                        onClick={() => setShowInactiveClasses(!showInactiveClasses)}
+                        className="flex items-center justify-center gap-2 w-full py-3 bg-slate-50 hover:bg-slate-100 text-slate-600 rounded-xl transition-colors font-semibold border border-slate-200 border-dashed"
+                      >
+                        <span>{showInactiveClasses ? '▲ Thu gọn' : '▼ Xem danh sách'}</span>
+                        <span>Lớp học đã dừng ({inactiveCount})</span>
+                      </button>
+                    </div>
+                  )}
+                  <div
+                    className={`group bg-white rounded-2xl shadow-sm border border-slate-100 p-5 hover:shadow-xl hover:shadow-slate-200 transition-all duration-300 relative overflow-hidden ${!cls.isActive ? 'opacity-75' : ''} ${isHidden ? 'hidden' : 'block'}`}
+                  >
+                    {/* Active Accent Bar */}
+                    <div className={`absolute top-0 left-0 right-0 h-1.5 ${cls.isActive ? 'bg-indigo-500' : 'bg-slate-300'}`} />
 
-              <div className="flex items-center gap-1.5 text-[10px] text-slate-400 mb-5">
-                <span>🕒</span>
-                <span>Cập nhật {formatDate(cls.updatedAt || cls.createdAt)}</span>
-              </div>
+                    {/* Header */}
+                    <div className="flex justify-between items-start mb-4">
+                      <h3 className="text-lg font-bold text-slate-800 group-hover:text-indigo-600 transition-colors truncate pr-2">
+                        {cls.className}
+                      </h3>
+                      <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${cls.isActive
+                        ? 'bg-emerald-50 text-emerald-600 border border-emerald-100'
+                        : 'bg-slate-100 text-slate-500 border border-slate-200'
+                        }`}>
+                        {cls.isActive ? 'Hoạt động' : 'Tạm dừng'}
+                      </span>
+                    </div>
 
-              {/* Actions */}
-              <div className="grid grid-cols-3 gap-2 pt-4 border-t border-slate-50">
-                <button
-                  onClick={() => navigate(`/classList/${cls.id}/students`)}
-                  className="flex flex-col items-center justify-center py-2 rounded-xl bg-slate-50 text-slate-700 hover:bg-indigo-50 hover:text-indigo-600 transition-all border border-transparent hover:border-indigo-100"
-                  title="Học sinh"
-                >
-                  <span className="text-base mb-1">👥</span>
-                  <span className="text-[10px] font-bold uppercase">Học sinh</span>
-                </button>
+                    {/* Thông tin lớp học */}
+                    <div className="space-y-2 mb-4">
+                      <div className="flex items-center gap-2 text-sm text-slate-600">
+                        <span className="text-indigo-400">📚</span>
+                        <span>{cls.subject}</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-sm text-slate-600">
+                        <span className="text-indigo-400">👥</span>
+                        <span>{cls.totalStudents} học sinh</span>
+                      </div>
+                      <div className="text-sm">
+                        <span className="text-emerald-600 font-bold text-base">
+                          {formatCurrency(cls.feePerSession)}/buổi
+                        </span><span className="text-slate-400 text-xs font-medium ml-1">/ buổi</span>
+                      </div>
+                      {cls.description && (
+                        <p className="text-xs text-slate-400 line-clamp-1 italic mt-1">
+                          {cls.description}
+                        </p>
+                      )}
+                    </div>
 
-                <button
-                  onClick={() => toggleClassStatus(cls.id, cls.isActive)}
-                  className={`flex flex-col items-center justify-center py-2 rounded-xl transition-all border border-transparent ${cls.isActive
-                      ? 'bg-slate-50 text-slate-700 hover:bg-amber-50 hover:text-amber-600 hover:border-amber-100'
-                      : 'bg-slate-50 text-slate-700 hover:bg-emerald-50 hover:text-emerald-600 hover:border-emerald-100'
-                    }`}
-                  title={cls.isActive ? 'Tạm dừng' : 'Kích hoạt'}
-                >
-                  <span className="text-base mb-1">{cls.isActive ? '⏸️' : '▶️'}</span>
-                  <span className="text-[10px] font-bold uppercase">{cls.isActive ? 'Dừng' : 'Mở'}</span>
-                </button>
+                    <div className="flex items-center gap-1.5 text-[10px] text-slate-400 mb-5">
+                      <span>🕒</span>
+                      <span>Cập nhật {formatDate(cls.updatedAt || cls.createdAt)}</span>
+                    </div>
 
-                <button
-                  onClick={() => deleteClass(cls.id, cls.className)}
-                  className="flex flex-col items-center justify-center py-2 rounded-xl bg-slate-50 text-slate-700 hover:bg-red-50 hover:text-red-600 transition-all border border-transparent hover:border-red-100"
-                  title="Xóa"
-                >
-                  <span className="text-base mb-1">🗑️</span>
-                  <span className="text-[10px] font-bold uppercase">Xóa</span>
-                </button>
-              </div>
-            </div>
-          ))}
+                    {/* Actions */}
+                    <div className="grid grid-cols-3 gap-2 pt-4 border-t border-slate-50">
+                      <button
+                        onClick={() => navigate(`/classList/${cls.id}/students`)}
+                        className="flex flex-col items-center justify-center py-2 rounded-xl bg-slate-50 text-slate-700 hover:bg-indigo-50 hover:text-indigo-600 transition-all border border-transparent hover:border-indigo-100"
+                        title="Học sinh"
+                      >
+                        <span className="text-base mb-1">👥</span>
+                        <span className="text-[10px] font-bold uppercase">Học sinh</span>
+                      </button>
+
+                      <button
+                        onClick={() => toggleClassStatus(cls.id, cls.isActive)}
+                        className={`flex flex-col items-center justify-center py-2 rounded-xl transition-all border border-transparent ${cls.isActive
+                          ? 'bg-slate-50 text-slate-700 hover:bg-amber-50 hover:text-amber-600 hover:border-amber-100'
+                          : 'bg-slate-50 text-slate-700 hover:bg-emerald-50 hover:text-emerald-600 hover:border-emerald-100'
+                          }`}
+                        title={cls.isActive ? 'Tạm dừng' : 'Kích hoạt'}
+                      >
+                        <span className="text-base mb-1">{cls.isActive ? '⏸️' : '▶️'}</span>
+                        <span className="text-[10px] font-bold uppercase">{cls.isActive ? 'Dừng' : 'Mở'}</span>
+                      </button>
+
+                      <button
+                        onClick={() => deleteClass(cls.id, cls.className)}
+                        className="flex flex-col items-center justify-center py-2 rounded-xl bg-slate-50 text-slate-700 hover:bg-red-50 hover:text-red-600 transition-all border border-transparent hover:border-red-100"
+                        title="Xóa"
+                      >
+                        <span className="text-base mb-1">🗑️</span>
+                        <span className="text-[10px] font-bold uppercase">Xóa</span>
+                      </button>
+                    </div>
+                  </div>
+                </React.Fragment>
+              );
+            })
+          })()}
         </div>
       )}
     </div>

@@ -12,7 +12,7 @@ import Home from './screen/HomeScreen';
 import CreateClass from './screen/classroom/CreateClassScreen';
 import ClassList from './screen/classroom/ClassListScreen';
 import StudentList from './screen/classroom/studentList';
-import Attendance from './screen/classroom/a';
+import Attendance from './screen/classroom/AttendanceScreen';
 import GoldPrice from './screen/classroom/goldPrices';
 import MergePDF from './screen/classroom/mergePDF';
 

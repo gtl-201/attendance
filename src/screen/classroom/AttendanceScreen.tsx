@@ -9,6 +9,8 @@ import {
     setDoc,
     getDoc,
     updateDoc,
+    addDoc,     // Thêm hàm này
+    deleteDoc   // Thêm hàm này
 } from 'firebase/firestore';
 import { db } from '../../firebase';
 
@@ -92,6 +94,13 @@ const Attendance: React.FC<AttendanceProps> = ({ user }) => {
     const [savingTemplate, setSavingTemplate] = useState(false);
 
     const [savedTemplate, setSavedTemplate] = useState<string>(''); // Thêm state này
+
+    // Các state quản lý điểm danh trực tiếp trên Modal Lịch
+    const [selectedClassForAttendance, setSelectedClassForAttendance] = useState<string>('');
+    const [editingAttendanceData, setEditingAttendanceData] = useState<{ [key: string]: 'present' | 'absent' | 'late' | 'excused' | 'makeup' }>({});
+    const [editingAttendanceNotes, setEditingAttendanceNotes] = useState<{ [key: string]: string }>({});
+    const [editingMakeupFees, setEditingMakeupFees] = useState<{ [key: string]: number }>({});
+    const [isSavingAttendance, setIsSavingAttendance] = useState(false);
 
     useEffect(() => {
         const fetchUserTemplate = async () => {
@@ -650,11 +659,100 @@ const Attendance: React.FC<AttendanceProps> = ({ user }) => {
     };
 
     // Handle date click in calendar
+    // Handle date click in calendar (Đã sửa để cho phép click ngày trống)
     const handleDateClick = (dateString: string) => {
-        const dayAttendance = getAttendanceForDate(dateString);
-        if (dayAttendance.length > 0) {
-            setSelectedDate(dateString);
-            setShowDateModal(true);
+        setSelectedDate(dateString);
+        setSelectedClassForAttendance('');
+        setEditingAttendanceData({});
+        setEditingAttendanceNotes({});
+        setEditingMakeupFees({});
+        setShowDateModal(true);
+    };
+
+    // Tự động load dữ liệu điểm danh nếu đã có sẵn khi chọn lớp trong Modal
+    useEffect(() => {
+        if (showDateModal && selectedDate && selectedClassForAttendance) {
+            const existingData: any = {};
+            const existingNotes: any = {};
+            const existingFees: any = {};
+
+            // Dùng trực tiếp attendanceRecords thay cho filteredRecords
+            const existingRecords = attendanceRecords.filter(
+                r => r.date === selectedDate && r.classId === selectedClassForAttendance
+            );
+
+            existingRecords.forEach(record => {
+                existingData[record.studentId] = record.status;
+                if (record.note) existingNotes[record.studentId] = record.note;
+                if (record.fee) existingFees[record.studentId] = record.fee;
+            });
+
+            setEditingAttendanceData(existingData);
+            setEditingAttendanceNotes(existingNotes);
+            setEditingMakeupFees(existingFees);
+        }
+        // QUAN TRỌNG: Không đưa filteredRecords hay attendanceRecords vào mảng bên dưới
+        // Việc này giúp state không bị reset mỗi lần bạn bấm nút điểm danh
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [selectedDate, selectedClassForAttendance, showDateModal]);
+
+
+
+    // Các hàm xử lý thao tác điểm danh trên Modal
+    const updateEditingAttendanceStatus = (studentId: string, status: 'present' | 'absent' | 'late' | 'excused' | 'makeup') => {
+        setEditingAttendanceData(prev => {
+            if (prev[studentId] === status) {
+                const newData = { ...prev };
+                delete newData[studentId];
+                return newData;
+            }
+            return { ...prev, [studentId]: status };
+        });
+    };
+
+    const markAllPresentForSelectedClass = () => {
+        const classStudents = students.filter(s => s.classId === selectedClassForAttendance && s.status === 'active');
+        const newAttendanceData = { ...editingAttendanceData };
+        classStudents.forEach(student => {
+            newAttendanceData[student.id] = 'present';
+        });
+        setEditingAttendanceData(newAttendanceData);
+    };
+
+    const handleSaveDateAttendance = async () => {
+        if (!selectedClassForAttendance || !selectedDate) return;
+        setIsSavingAttendance(true);
+        try {
+            // 1. Xóa các bản ghi cũ của lớp này trong ngày đang chọn
+            const existingRecords = filteredRecords.filter(
+                r => r.date === selectedDate && r.classId === selectedClassForAttendance
+            );
+            for (const record of existingRecords) {
+                await deleteDoc(doc(db, 'attendance', record.id));
+            }
+
+            // 2. Thêm các bản ghi mới
+            const promises = Object.entries(editingAttendanceData).map(([studentId, status]) => {
+                const record = {
+                    studentId,
+                    classId: selectedClassForAttendance,
+                    date: selectedDate,
+                    status,
+                    note: editingAttendanceNotes[studentId] || '',
+                    ...(status === 'makeup' && editingMakeupFees[studentId] && { fee: editingMakeupFees[studentId] }),
+                    createdAt: new Date()
+                };
+                return addDoc(collection(db, 'attendance'), record);
+            });
+
+            await Promise.all(promises);
+            addMessage('success', 'Đã lưu điểm danh thành công!');
+            fetchAttendanceRecords(); // Làm mới dữ liệu
+            setSelectedClassForAttendance(''); // Trở về màn hình tóm tắt
+        } catch (error) {
+            addMessage('error', 'Lỗi khi lưu điểm danh');
+        } finally {
+            setIsSavingAttendance(false);
         }
     };
 
@@ -2393,163 +2491,251 @@ const Attendance: React.FC<AttendanceProps> = ({ user }) => {
                         </div>
 
                         <div className="p-6">
-                            {(() => {
-                                const dayAttendance = getAttendanceForDate(selectedDate);
+                            {/* Khối chọn lớp để điểm danh trực tiếp */}
+                            <div className="mb-6 bg-blue-50 p-4 rounded-lg border border-blue-100">
+                                <label className="block text-sm font-medium text-blue-800 mb-2">
+                                    Thao tác điểm danh cho ngày này:
+                                </label>
+                                <select
+                                    value={selectedClassForAttendance}
+                                    onChange={(e) => setSelectedClassForAttendance(e.target.value)}
+                                    className="w-full px-3 py-2 border border-blue-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                                >
+                                    <option value="">-- Chọn lớp để điểm danh hoặc xem tóm tắt --</option>
+                                    {classes.map(c => (
+                                        <option key={c.id} value={c.id}>{c.className} - {c.subject}</option>
+                                    ))}
+                                </select>
+                            </div>
 
-                                if (dayAttendance.length === 0) {
-                                    return (
-                                        <div className="text-center py-8 text-gray-500">
-                                            Không có dữ liệu điểm danh cho ngày này
+                            {selectedClassForAttendance ? (
+                                /* Giao diện điểm danh cho lớp được chọn */
+                                <div className="space-y-4">
+                                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-3">
+                                        <h3 className="font-semibold text-gray-800">Danh sách học sinh</h3>
+                                        <div className="flex gap-2 w-full sm:w-auto">
+                                            <button
+                                                onClick={markAllPresentForSelectedClass}
+                                                className="flex-1 sm:flex-none px-3 py-2 bg-green-100 text-green-700 rounded-md text-sm font-medium hover:bg-green-200 transition-colors"
+                                            >
+                                                Tất cả có mặt
+                                            </button>
+
                                         </div>
-                                    );
-                                }
+                                    </div>
 
-                                // Group attendance by class
-                                const attendanceByClass: { [classId: string]: AttendanceData[] } = {};
-                                dayAttendance.forEach(record => {
-                                    if (!attendanceByClass[record.classId]) {
-                                        attendanceByClass[record.classId] = [];
+                                    <div className="grid gap-3">
+                                        {students.filter(s => s.classId === selectedClassForAttendance && s.status === 'active').length === 0 && (
+                                            <p className="text-gray-500 text-center py-4 bg-gray-50 rounded-lg">Lớp này chưa có học sinh nào.</p>
+                                        )}
+                                        {students.filter(s => s.classId === selectedClassForAttendance && s.status === 'active').map(student => (
+                                            <div key={student.id} className="p-3 border border-gray-200 rounded-lg bg-white shadow-sm">
+                                                <div className="flex flex-col xl:flex-row justify-between xl:items-center gap-3">
+                                                    <div>
+                                                        <div className="font-medium text-gray-800">{student.studentName}</div>
+                                                        <div className="text-xs text-gray-500">{student.studentEmail}</div>
+                                                    </div>
+                                                    <div className="flex flex-wrap gap-2">
+                                                        {['present', 'late', 'absent', 'excused', 'makeup'].map(status => (
+                                                            <button
+                                                                key={status}
+                                                                onClick={() => updateEditingAttendanceStatus(student.id, status as any)}
+                                                                className={`px-3 py-1.5 text-xs rounded-md font-medium transition-all ${editingAttendanceData[student.id] === status
+                                                                    ? status === 'present' ? 'bg-green-500 text-white shadow-md' :
+                                                                        status === 'late' ? 'bg-yellow-500 text-white shadow-md' :
+                                                                            status === 'absent' ? 'bg-red-500 text-white shadow-md' :
+                                                                                status === 'excused' ? 'bg-blue-500 text-white shadow-md' :
+                                                                                    'bg-purple-500 text-white shadow-md'
+                                                                    : 'border border-gray-200 text-gray-600 hover:bg-gray-50'
+                                                                    }`}
+                                                            >
+                                                                {status === 'present' ? '✅ Có mặt' :
+                                                                    status === 'late' ? '⏰ Muộn' :
+                                                                        status === 'absent' ? '❌ Vắng' :
+                                                                            status === 'excused' ? '📝 Xin nghỉ' : '🔄 Bổ sung'}
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                </div>
+
+                                                {/* Form phí bổ sung và ghi chú */}
+                                                {editingAttendanceData[student.id] === 'makeup' && (
+                                                    <div className="mt-2">
+                                                        <input
+                                                            type="number"
+                                                            placeholder="Phí bổ sung (VNĐ)"
+                                                            value={editingMakeupFees[student.id] || ''}
+                                                            onChange={(e) => setEditingMakeupFees(prev => ({ ...prev, [student.id]: Number(e.target.value) }))}
+                                                            className="w-full px-3 py-1.5 text-sm border border-purple-200 rounded-md focus:outline-none focus:ring-1 focus:ring-purple-500"
+                                                        />
+                                                    </div>
+                                                )}
+                                                <div className="mt-2">
+                                                    <input
+                                                        type="text"
+                                                        placeholder="Ghi chú (Tùy chọn)..."
+                                                        value={editingAttendanceNotes[student.id] || ''}
+                                                        onChange={(e) => setEditingAttendanceNotes(prev => ({ ...prev, [student.id]: e.target.value }))}
+                                                        className="w-full px-3 py-1.5 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                                    />
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            ) : (
+                                /* Giao diện xem tóm tắt gốc khi không chọn lớp */
+                                (() => {
+                                    const dayAttendance = getAttendanceForDate(selectedDate);
+
+                                    if (dayAttendance.length === 0) {
+                                        return (
+                                            <div className="text-center py-8 text-gray-500">
+                                                Chưa có dữ liệu điểm danh nào cho ngày này. Hãy chọn một lớp ở trên để bắt đầu điểm danh.
+                                            </div>
+                                        );
                                     }
-                                    attendanceByClass[record.classId].push(record);
-                                });
 
-                                return (
-                                    <div className="space-y-6">
-                                        {/* Summary Statistics - Đã thêm card Xin nghỉ */}
-                                        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                                            <div className="bg-gray-50 p-4 rounded-lg text-center">
-                                                <div className="text-2xl font-bold text-gray-700">{dayAttendance.length}</div>
-                                                <div className="text-sm text-gray-600">Tổng lượt điểm danh</div>
-                                            </div>
-                                            <div className="bg-green-50 p-4 rounded-lg text-center">
-                                                <div className="text-2xl font-bold text-green-600">
-                                                    {dayAttendance.filter(r => r.status === 'present').length}
-                                                </div>
-                                                <div className="text-sm text-gray-600 flex items-center justify-center gap-1">
-                                                    <span className="text-green-500">✅</span>
-                                                    <span>Có mặt</span>
-                                                </div>
-                                            </div>
-                                            <div className="bg-yellow-50 p-4 rounded-lg text-center">
-                                                <div className="text-2xl font-bold text-yellow-600">
-                                                    {dayAttendance.filter(r => r.status === 'late').length}
-                                                </div>
-                                                <div className="text-sm text-gray-600 flex items-center justify-center gap-1">
-                                                    <span className="text-yellow-500">⏰</span>
-                                                    <span>Muộn</span>
-                                                </div>
-                                            </div>
-                                            <div className="bg-red-50 p-4 rounded-lg text-center">
-                                                <div className="text-2xl font-bold text-red-600">
-                                                    {dayAttendance.filter(r => r.status === 'absent').length}
-                                                </div>
-                                                <div className="text-sm text-gray-600 flex items-center justify-center gap-1">
-                                                    <span className="text-red-500">❌</span>
-                                                    <span>Vắng mặt</span>
-                                                </div>
-                                            </div>
-                                            <div className="bg-purple-50 p-4 rounded-lg text-center">
-                                                <div className="text-2xl font-bold text-purple-600">
-                                                    {dayAttendance.filter(r => r.status === 'excused').length}
-                                                </div>
-                                                <div className="text-sm text-gray-600 flex items-center justify-center gap-1">
-                                                    <span className="text-purple-500">📝</span>
-                                                    <span>Xin nghỉ</span>
-                                                </div>
-                                            </div>
-                                            <div className="bg-indigo-50 p-4 rounded-lg text-center">
-                                                <div className="text-2xl font-bold text-indigo-600">
-                                                    {dayAttendance.filter(r => r.status === 'makeup').length}
-                                                </div>
-                                                <div className="text-sm text-gray-600 flex items-center justify-center gap-1">
-                                                    <span className="text-indigo-500">🔄</span>
-                                                    <span>Bổ sung</span>
-                                                </div>
-                                            </div>
-                                        </div>
+                                    // Nhóm theo lớp học
+                                    const attendanceByClass: { [classId: string]: AttendanceData[] } = {};
+                                    dayAttendance.forEach(record => {
+                                        if (!attendanceByClass[record.classId]) {
+                                            attendanceByClass[record.classId] = [];
+                                        }
+                                        attendanceByClass[record.classId].push(record);
+                                    });
 
-                                        {/* Attendance by Class */}
-                                        <div className="space-y-4">
-                                            {Object.entries(attendanceByClass).map(([classId, classAttendance]) => {
-                                                const classInfo = classes.find(c => c.id === classId);
-                                                const presentCount = classAttendance.filter(r => r.status === 'present').length;
-                                                const lateCount = classAttendance.filter(r => r.status === 'late').length;
-                                                const absentCount = classAttendance.filter(r => r.status === 'absent').length;
-                                                const excusedCount = classAttendance.filter(r => r.status === 'excused').length;
+                                    return (
+                                        <div className="space-y-6">
+                                            {/* Summary Statistics Card */}
+                                            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                                                {/* Code hiển thị tóm tắt của bạn giữ nguyên ở đây */}
+                                                <div className="bg-gray-50 p-4 rounded-lg text-center">
+                                                    <div className="text-2xl font-bold text-gray-700">{dayAttendance.length}</div>
+                                                    <div className="text-sm text-gray-600">Tổng lượt</div>
+                                                </div>
+                                                <div className="bg-green-50 p-4 rounded-lg text-center">
+                                                    <div className="text-2xl font-bold text-green-600">
+                                                        {dayAttendance.filter(r => r.status === 'present').length}
+                                                    </div>
+                                                    <div className="text-sm text-gray-600 flex items-center justify-center gap-1">
+                                                        <span className="text-green-500">✅</span>
+                                                        <span>Có mặt</span>
+                                                    </div>
+                                                </div>
+                                                <div className="bg-yellow-50 p-4 rounded-lg text-center">
+                                                    <div className="text-2xl font-bold text-yellow-600">
+                                                        {dayAttendance.filter(r => r.status === 'late').length}
+                                                    </div>
+                                                    <div className="text-sm text-gray-600 flex items-center justify-center gap-1">
+                                                        <span className="text-yellow-500">⏰</span>
+                                                        <span>Muộn</span>
+                                                    </div>
+                                                </div>
+                                                <div className="bg-red-50 p-4 rounded-lg text-center">
+                                                    <div className="text-2xl font-bold text-red-600">
+                                                        {dayAttendance.filter(r => r.status === 'absent').length}
+                                                    </div>
+                                                    <div className="text-sm text-gray-600 flex items-center justify-center gap-1">
+                                                        <span className="text-red-500">❌</span>
+                                                        <span>Vắng</span>
+                                                    </div>
+                                                </div>
+                                                <div className="bg-purple-50 p-4 rounded-lg text-center">
+                                                    <div className="text-2xl font-bold text-purple-600">
+                                                        {dayAttendance.filter(r => r.status === 'excused').length}
+                                                    </div>
+                                                    <div className="text-sm text-gray-600 flex items-center justify-center gap-1">
+                                                        <span className="text-purple-500">📝</span>
+                                                        <span>Xin nghỉ</span>
+                                                    </div>
+                                                </div>
+                                            </div>
 
-                                                return (
-                                                    <div key={classId} className="border border-gray-200 rounded-lg overflow-hidden">
-                                                        <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
-                                                            <div className="flex items-center justify-between">
-                                                                <h3 className="text-lg font-semibold text-gray-800">
-                                                                    📚 {classInfo ? `${classInfo.className} - ${classInfo.subject}` : 'Lớp không xác định'}
-                                                                </h3>
-                                                                <div className="flex items-center space-x-4 text-sm flex-wrap">
-                                                                    <span className="text-green-600 font-medium">
-                                                                        ✅ {presentCount}
-                                                                    </span>
-                                                                    <span className="text-yellow-600 font-medium">
-                                                                        ⏰ {lateCount}
-                                                                    </span>
-                                                                    <span className="text-red-600 font-medium">
-                                                                        ❌ {absentCount}
-                                                                    </span>
-                                                                    <span className="text-purple-600 font-medium">
-                                                                        📝 {excusedCount}
-                                                                    </span>
+                                            {/* Danh sách theo lớp học */}
+                                            <div className="space-y-4">
+                                                {Object.entries(attendanceByClass).map(([classId, classAttendance]) => {
+                                                    const classInfo = classes.find(c => c.id === classId);
+                                                    const presentCount = classAttendance.filter(r => r.status === 'present').length;
+                                                    const lateCount = classAttendance.filter(r => r.status === 'late').length;
+                                                    const absentCount = classAttendance.filter(r => r.status === 'absent').length;
+                                                    const excusedCount = classAttendance.filter(r => r.status === 'excused').length;
+
+                                                    return (
+                                                        <div key={classId} className="border border-gray-200 rounded-lg overflow-hidden">
+                                                            <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
+                                                                <div className="flex items-center justify-between">
+                                                                    <h3 className="text-lg font-semibold text-gray-800">
+                                                                        📚 {classInfo ? `${classInfo.className} - ${classInfo.subject}` : 'Lớp không xác định'}
+                                                                    </h3>
+                                                                    <div className="flex items-center space-x-4 text-sm flex-wrap">
+                                                                        <span className="text-green-600 font-medium">✅ {presentCount}</span>
+                                                                        <span className="text-yellow-600 font-medium">⏰ {lateCount}</span>
+                                                                        <span className="text-red-600 font-medium">❌ {absentCount}</span>
+                                                                        <span className="text-purple-600 font-medium">📝 {excusedCount}</span>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+
+                                                            <div className="p-4">
+                                                                <div className="grid gap-3">
+                                                                    {classAttendance.map(record => (
+                                                                        <div key={record.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 bg-white border border-gray-100 rounded-lg hover:shadow-sm gap-2">
+                                                                            <div className="flex items-center space-x-3">
+                                                                                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white font-bold ${record.status === 'present' ? 'bg-green-500' :
+                                                                                    record.status === 'late' ? 'bg-yellow-500' :
+                                                                                        record.status === 'absent' ? 'bg-red-500' :
+                                                                                            record.status === 'makeup' ? 'bg-purple-500' : 'bg-blue-500'
+                                                                                    }`}>
+                                                                                    {getStatusIcon(record.status)}
+                                                                                </div>
+                                                                                <div>
+                                                                                    <div className="font-medium text-gray-800">
+                                                                                        {getStudentName(record.studentId)}
+                                                                                    </div>
+                                                                                </div>
+                                                                            </div>
+
+                                                                            <div className="flex items-center space-x-4 ml-11 sm:ml-0">
+                                                                                <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(record.status)}`}>
+                                                                                    {record.status === 'present' ? 'Có mặt' :
+                                                                                        record.status === 'late' ? 'Muộn' :
+                                                                                            record.status === 'absent' ? "Vắng mặt" :
+                                                                                                record.status === 'makeup' ? 'Bổ sung' : 'Xin nghỉ'}
+                                                                                </span>
+                                                                                {record.note && (
+                                                                                    <div className="text-sm text-gray-600 max-w-[150px] sm:max-w-xs truncate">
+                                                                                        <span className="font-medium">Ghi chú:</span> {record.note}
+                                                                                    </div>
+                                                                                )}
+                                                                            </div>
+                                                                        </div>
+                                                                    ))}
                                                                 </div>
                                                             </div>
                                                         </div>
-
-                                                        <div className="p-4">
-                                                            <div className="grid gap-3">
-                                                                {classAttendance.map(record => (
-                                                                    <div key={record.id} className="flex items-center justify-between p-3 bg-white border border-gray-100 rounded-lg hover:shadow-sm">
-                                                                        <div className="flex items-center space-x-3">
-                                                                            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white font-bold ${record.status === 'present' ? 'bg-green-500' :
-                                                                                record.status === 'late' ? 'bg-yellow-500' :
-                                                                                    record.status === 'absent' ? 'bg-red-500' : 'bg-purple-500'
-                                                                                }`}>
-                                                                                {getStatusIcon(record.status)}
-                                                                            </div>
-                                                                            <div>
-                                                                                <div className="font-medium text-gray-800">
-                                                                                    {getStudentName(record.studentId)}
-                                                                                </div>
-                                                                                <div className="text-sm text-gray-500">
-                                                                                    {students.find(s => s.id === record.studentId)?.studentEmail || 'Email không xác định'}
-                                                                                </div>
-                                                                            </div>
-                                                                        </div>
-
-                                                                        <div className="flex items-center space-x-4">
-                                                                            <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(record.status)}`}>
-                                                                                {record.status === 'present' ? 'Có mặt' :
-                                                                                    record.status === 'late' ? 'Muộn' :
-                                                                                        record.status === 'absent' ? "Vắng mặt" :
-                                                                                            record.status === 'makeup' ? 'Bổ sung' : 'Xin nghỉ'}
-                                                                            </span>
-                                                                            {record.note && (
-                                                                                <div className="text-sm text-gray-600 max-w-xs">
-                                                                                    <span className="font-medium">Ghi chú:</span> {record.note}
-                                                                                </div>
-                                                                            )}
-                                                                        </div>
-                                                                    </div>
-                                                                ))}
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                );
-                                            })}
+                                                    );
+                                                })}
+                                            </div>
                                         </div>
-                                    </div>
-                                );
-                            })()}
+                                    );
+                                })()
+                            )}
                         </div>
 
                         <div className="sticky bottom-0 bg-gray-50 px-6 py-4 border-t border-gray-200">
                             <div className="flex justify-end">
+                                {/* Nút Lưu chỉ hiện ra khi người dùng đã chọn 1 lớp để điểm danh */}
+                                {selectedClassForAttendance && (
+                                    <button
+                                        onClick={handleSaveDateAttendance}
+                                        disabled={isSavingAttendance}
+                                        className="px-6 py-2 mr-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors shadow-sm"
+                                    >
+                                        {isSavingAttendance ? 'Đang lưu...' : '💾 Lưu'}
+                                    </button>
+                                )}
+
                                 <button
                                     onClick={closeModal}
                                     className="px-6 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700"

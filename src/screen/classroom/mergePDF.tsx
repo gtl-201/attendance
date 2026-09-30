@@ -4,6 +4,7 @@ import React, { useRef, useState, CSSProperties } from "react";
 import { PDFDocument, PDFImage } from "pdf-lib";
 import JSZip from "jszip";
 
+declare module "heic2any";
 /**
  * PHIÊN BẢN CHẠY TRÊN TRÌNH DUYỆT (localhost / Vercel)
  * -----------------------------------------------------
@@ -24,7 +25,8 @@ import JSZip from "jszip";
  *    tải trực tiếp 1 file .pdf nếu chỉ có đúng 1 nguồn).
  */
 
-const IMAGE_EXTS = [".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp"];
+// const IMAGE_EXTS = [".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp"];
+const IMAGE_EXTS = [".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp", ".heic", ".heif"];
 const ZIP_EXT = ".zip";
 
 type ItemKind = "folder" | "zip";
@@ -172,6 +174,21 @@ const ImageToPdfScreen: React.FC<ImageToPdfProps> = () => {
     setResults([]);
   };
 
+  // Chuyển đổi HEIC / HEIF sang Blob định dạng JPEG
+  const convertHeicToJpegBytes = async (bytes: Uint8Array): Promise<Uint8Array> => {
+    // Gọi thư viện dạng dynamic import để tránh lỗi SSR trên Next.js
+    const heic2any = (await import("heic2any")).default;
+
+    const inputBlob = new Blob([bytes as unknown as BlobPart], { type: "image/heic" });
+    const converted = await heic2any({
+      blob: inputBlob,
+      toType: "image/jpeg",
+      quality: 0.92,
+    });
+    const resultBlob = Array.isArray(converted) ? converted[0] : converted;
+    return new Uint8Array(await resultBlob.arrayBuffer());
+  };
+
   // Chuyển 1 ảnh không phải PNG/JPEG (webp, gif, bmp...) sang PNG bằng canvas,
   // vì pdf-lib chỉ nhúng trực tiếp được PNG và JPEG.
   const convertToPngBytes = async (bytes: Uint8Array, mime: string): Promise<Uint8Array> => {
@@ -196,6 +213,7 @@ const ImageToPdfScreen: React.FC<ImageToPdfProps> = () => {
   };
 
   // Nhúng 1 ảnh vào PDFDocument, tự chuyển định dạng nếu cần.
+  // TÌM HÀM NÀY (Khoảng dòng 197):
   const embedImageAuto = async (
     pdfDoc: PDFDocument,
     bytes: Uint8Array,
@@ -204,6 +222,12 @@ const ImageToPdfScreen: React.FC<ImageToPdfProps> = () => {
     const ext = getExt(filename);
     if (ext === ".png") return pdfDoc.embedPng(bytes);
     if (ext === ".jpg" || ext === ".jpeg") return pdfDoc.embedJpg(bytes);
+
+    // THÊM 4 DÒNG NÀY ĐỂ XỬ LÝ HEIC/HEIF:
+    if (ext === ".heic" || ext === ".heif") {
+      const jpegBytes = await convertHeicToJpegBytes(bytes);
+      return pdfDoc.embedJpg(jpegBytes);
+    }
 
     const mime = MIME_MAP[ext] || "image/png";
     const pngBytes = await convertToPngBytes(bytes, mime);
